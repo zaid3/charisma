@@ -14,6 +14,7 @@ import time
 from urllib.parse import urlsplit
 
 from .core import CharismaError
+from .history import recent_runs, pause_project, undo_candidate
 
 CODES = {
     'script-error': ('runtime', 'Browser script error'),
@@ -114,7 +115,8 @@ class RateLimit:
             return count < 60
 
 
-def make_server(host: str, port: int, database: Path, origins: list[str], site_key: str, admin_token: str) -> ThreadingHTTPServer:
+def make_server(host: str, port: int, database: Path, origins: list[str], site_key: str, admin_token: str, runner_state: Path | None = None) -> ThreadingHTTPServer:
+    runner_state = runner_state.resolve() if runner_state else None
     allowed = {valid_origin(origin) for origin in origins}
     if not allowed or not re.fullmatch(r'[A-Za-z0-9_-]{8,80}', site_key) or len(admin_token) < 24 or hmac.compare_digest(site_key.encode(), admin_token.encode()):
         raise CharismaError('Configure an allowed origin, a public site key and a separate admin token of at least 24 characters.')
@@ -158,6 +160,10 @@ def make_server(host: str, port: int, database: Path, origins: list[str], site_k
         def do_GET(self):
             if self.path == '/health':
                 return self.reply(200, {'status': 'ok'})
+            if self.path == '/api/runs':
+                if not self.admin():
+                    return self.reply(401, {'error':'Dashboard authentication required.'})
+                return self.reply(200, recent_runs(runner_state))
             if self.path == '/api/events':
                 if not self.admin():
                     return self.reply(401, {'error': 'Enter the dashboard access token.'})
@@ -167,6 +173,18 @@ def make_server(host: str, port: int, database: Path, origins: list[str], site_k
                 return self.reply(200, (static / name).read_bytes(), kind)
             self.reply(404, {'error': 'Not found.'})
         def do_POST(self):
+            operation = re.fullmatch(r'/api/runs/([0-9a-f]{16})/(pause|resume|undo)', self.path)
+            if operation:
+                if not self.admin():
+                    return self.reply(401, {'error':'Dashboard authentication required.'})
+                if runner_state is None:
+                    return self.reply(409, {'error':'Worker history is not connected.'})
+                run_id, action = operation.groups()
+                try:
+                    result = undo_candidate(runner_state,run_id) if action == 'undo' else pause_project(runner_state,run_id,action == 'pause')
+                    return self.reply(200,result)
+                except (CharismaError,OSError,ValueError) as exc:
+                    return self.reply(409, {'error':str(exc) if isinstance(exc,CharismaError) else 'The local control action could not be completed.'})
             match = re.fullmatch(r'/api/events/([0-9]+)/review', self.path)
             if match:
                 if not self.admin():

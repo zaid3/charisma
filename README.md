@@ -170,3 +170,36 @@ See [architecture and trust boundaries](docs/architecture.md), [privacy](docs/pr
 ## Licence
 
 [Apache License 2.0](LICENSE). This permits commercial reuse subject to the licence terms. Hosted services, support and custom integrations can be offered separately; this repository does not include a billing system.
+
+## Activity history and recovery
+
+Connect the monitor dashboard to the same private state directory as the worker:
+
+```sh
+charisma serve --origin https://your-website.example \
+  --site-key your-public-installation-key \
+  --runner-state /var/lib/charisma/runs
+```
+
+The **Agent history** section shows each recorded run, its commit, current stage, timestamp and expandable role timeline. Pause/resume controls affect future repair phases for that project. A running model call or test can finish before the pause takes effect.
+
+**Undo candidate** restores only the recorded, unpublished repair files to their base commit. It checks for unexpected edits and refuses to overwrite later human work or a committed candidate. This is not a rollback of a live website, mobile release or database. Application rollback, backups and per-service quarantine need deployment-specific integrations that are not included yet.
+
+## Investigate unusual server activity
+
+Charisma can triage an authorised local server-log slice without contacting any source address:
+
+```sh
+charisma triage --log /private/server.ndjson \
+  --out /private/incident.json --markdown /private/incident.md
+```
+
+Each newline-delimited JSON record needs `source_ip`, integer `status`, and an ISO timestamp with a timezone, for example:
+
+```json
+{"source_ip":"192.0.2.10","status":401,"timestamp":"2026-10-26T12:00:00Z"}
+```
+
+The report includes an evidence hash, observed response counts, timestamps, possible impact, unconfirmed causes and suggested investigation steps. Repeated access denials, rate limits or server errors are signals to investigate, not proof of an attacker. Other fields such as full paths, user details and tokens are not copied into the report.
+
+It does not identify a person behind an IP address, install a tracking program, perform retaliation or automatically block visitors. Gateway blocking, production isolation and full penetration testing remain separate integrations requiring a defined authorised scope. A source scan or log report is labelled accurately and is never presented as a completed penetration test.

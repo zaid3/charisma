@@ -49,6 +49,7 @@ def parser() -> argparse.ArgumentParser:
     serve.add_argument('--origin', action='append', required=True, help='Exact allowed website origin; repeat as needed')
     serve.add_argument('--site-key', required=True, help='Public installation identifier, not the dashboard secret')
     serve.add_argument('--database', type=Path, default=Path('.charisma/events.sqlite3'))
+    serve.add_argument('--runner-state', type=Path, help='Connect an existing worker state directory for history and controls')
     serve.add_argument('--host', default='127.0.0.1')
     serve.add_argument('--port', type=int, default=8787)
     runner = commands.add_parser('watch', help='Poll configured checkouts with separate specialist and auditor roles')
@@ -57,12 +58,25 @@ def parser() -> argparse.ArgumentParser:
     runner.add_argument('--allow-model', action='store_true')
     runner.add_argument('--trust-tests', action='store_true')
     runner.add_argument('--allow-publish', action='store_true', help='Permit configured draft PR publication; never merges')
+    incident = commands.add_parser('triage', help='Analyse an authorised local server log without contacting source addresses')
+    incident.add_argument('--log', required=True, type=Path)
+    incident.add_argument('--out', required=True, type=Path)
+    incident.add_argument('--markdown', type=Path)
     return cli
 
 
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
+        if args.command == 'triage':
+            from .incidents import triage, incident_markdown
+            from .core import write_private
+            report = triage(args.log)
+            write_json(args.out, report)
+            if args.markdown:
+                write_private(args.markdown, incident_markdown(report))
+            print(f"Reviewed {report['records_reviewed']} local log records; {len(report['signals'])} source groups need review. No network requests were made.")
+            return 0
         if args.command == 'watch':
             from .runner import watch
             return watch(args.config, args.once, args.allow_model, args.trust_tests, args.allow_publish)
@@ -97,7 +111,7 @@ def main(argv=None) -> int:
             token = os.environ.get('CHARISMA_ADMIN_TOKEN', '')
             if not token:
                 raise CharismaError('Set CHARISMA_ADMIN_TOKEN to a random secret of at least 24 characters. Keep it out of website code.')
-            server = make_server(args.host, args.port, args.database, args.origin, args.site_key, token)
+            server = make_server(args.host, args.port, args.database, args.origin, args.site_key, token, args.runner_state)
             print(f'Charisma dashboard: http://{args.host}:{server.server_port}', flush=True)
             print('Pilot server. Use a TLS reverse proxy with access and request limits for a hosted installation.', flush=True)
             try:

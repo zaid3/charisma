@@ -11,7 +11,7 @@ import tomllib
 import uuid
 
 from .agents import platform_for_path
-from .core import CharismaError, digest, require_clean_repo, write_json
+from .core import CharismaError, digest, require_clean_repo, write_json, load_json
 from .repair import apply_plan, editable, model_plan, publish, verify
 from .scan import scan
 
@@ -67,6 +67,30 @@ def runner_lock(state: Path):
             fcntl.flock(file,fcntl.LOCK_UN)
 
 
+@contextmanager
+def cycle_lock(state: Path):
+    try:
+        import fcntl
+    except ImportError:
+        raise CharismaError('Worker controls require Linux or macOS.') from None
+    state.mkdir(parents=True,exist_ok=True)
+    with (state/'cycle.lock').open('a') as file:
+        try:
+            fcntl.flock(file,fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise CharismaError('A worker cycle is active. Pause repairs and wait for it to finish before undoing a candidate.') from None
+        try:
+            yield
+        finally:
+            fcntl.flock(file,fcntl.LOCK_UN)
+
+
+def assert_not_paused(state: Path, name: str):
+    control=state/'controls.json'
+    if control.exists() and load_json(control).get(name):
+        raise CharismaError('Repairs for this project are paused by the operator.')
+
+
 def run_cycle(config: dict, allow_model=False, trust_tests=False, allow_publish=False) -> list[dict]:
     state=Path(config['state_directory']); state.mkdir(parents=True,exist_ok=True)
     results=[]
@@ -77,6 +101,7 @@ def run_cycle(config: dict, allow_model=False, trust_tests=False, allow_publish=
             name, root = project['name'], Path(project['path'])
             fingerprint=None
             try:
+                assert_not_paused(state,name)
                 mode=project.get('mode','scan')
                 if mode == 'repair' and (not allow_model or not trust_tests):
                     raise CharismaError('Repair mode requires --allow-model and --trust-tests on the runner.')
@@ -107,16 +132,18 @@ def run_cycle(config: dict, allow_model=False, trust_tests=False, allow_publish=
                 platform=platform_for_path(candidates[0]['path']) if project.get('platform','auto') == 'auto' else project['platform']
                 stage(platform+'_specialist','preparing')
                 # One proposal and one separate audit request at most. No automatic retry loop.
-                plan=model_plan(root,report,None,True,platform); write_json(folder/'plan.json',plan)
+                plan=model_plan(root,report,None,True,platform); assert_not_paused(state,name); write_json(folder/'plan.json',plan)
                 stage('independent_auditor','approved',plan['audit']['summary'])
                 worktree=folder/'candidate'; apply_plan(root,plan,worktree)
                 stage('verifier','testing')
+                assert_not_paused(state,name)
                 receipt=verify(worktree,project['tests'],True)
                 if not receipt['verified']:
                     stage('verifier','verification_failed')
                     results.append({'project':name,'status':'verification_failed','run_id':run_id,'worktree':str(worktree)}); continue
                 stage('verifier','verified')
                 if project.get('publish',False):
+                    assert_not_paused(state,name)
                     url=publish(worktree,project['repository'],'Charisma: resolve reviewed '+platform+' findings')
                     stage('release_guard','draft_pr_opened',url)
                 else:
@@ -137,7 +164,8 @@ def watch(path: Path, once=False, allow_model=False, trust_tests=False, allow_pu
     config=read_config(path)
     with runner_lock(Path(config['state_directory'])):
         while True:
-            outcomes=run_cycle(config,allow_model,trust_tests,allow_publish)
+            with cycle_lock(Path(config['state_directory'])):
+                outcomes=run_cycle(config,allow_model,trust_tests,allow_publish)
             print(json.dumps(outcomes),flush=True)
             if once:
                 return int(any(r['status'] in {'blocked','verification_failed'} for r in outcomes))

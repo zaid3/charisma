@@ -47,6 +47,47 @@
     if (!response.ok) throw new Error(response.status === 401 ? 'The access token was not accepted. Disconnect and enter the correct token.' : 'Reports could not be loaded. Check the server and try again.');
     return response.json();
   }
+  let pendingUndo = null;
+  function renderRuns(result) {
+    $('history-status').textContent = result.message;
+    $('run-list').replaceChildren();
+    for (const run of result.runs) {
+      const article = node('article', undefined, 'event run');
+      const details = node('details');
+      details.append(node('summary', `${run.project} · ${run.commit_sha.slice(0, 8)}`));
+      const timeline = node('ol', undefined, 'timeline');
+      for (const step of run.timeline) {
+        const item = node('li');
+        item.append(node('strong', `${step.role.replaceAll('_', ' ')}: ${step.status.replaceAll('_', ' ')}`), node('time', date(step.at)), node('p', step.detail || ''));
+        timeline.append(item);
+      }
+      details.append(timeline);
+      const actions = node('div', undefined, 'actions');
+      const pause = node('button', run.paused ? 'Resume repairs' : 'Pause repairs', 'secondary');
+      pause.addEventListener('click', () => control(run.id, run.paused ? 'resume' : 'pause', pause));
+      actions.append(pause);
+      if (run.can_undo) {
+        const undo = node('button', 'Undo candidate', 'secondary');
+        undo.addEventListener('click', () => { pendingUndo = run.id; $('undo-dialog').showModal(); $('undo-cancel').focus(); });
+        actions.append(undo);
+      }
+      article.append(node('h3', run.project), node('span', `${run.status.replaceAll('_', ' ')}${run.paused ? ' · repairs paused' : ''}`, 'run-status'), node('p', `Updated ${date(run.updated)}`), node('p', run.detail || '', 'run-detail'), details, actions);
+      $('run-list').append(article);
+    }
+  }
+  async function control(id, action, button) {
+    const current = generation;
+    button.disabled = true;
+    try {
+      const response = await fetch(`/api/runs/${id}/${action}`, {method:'POST', headers:{Authorization:`Bearer ${token}`}, credentials:'omit', signal:AbortSignal.timeout(10000)});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'The action was not completed.');
+      if (current === generation) await refresh();
+    } catch (error) { if (current === generation) status(error.message, true); }
+    finally { button.disabled = false; }
+  }
+  $('undo-cancel').addEventListener('click', () => { pendingUndo = null; $('undo-dialog').close(); });
+  $('undo-confirm').addEventListener('click', () => { const id = pendingUndo; pendingUndo = null; $('undo-dialog').close(); if (id) control(id, 'undo', $('undo-confirm')); });
   async function refresh() {
     if (busy) return;
     const current = generation;
@@ -60,6 +101,8 @@
       $('connection').textContent = 'Connected'; $('connection').className = 'connection connected';
       status(`Updated ${date(updated)}. Counts describe the ${events.length} loaded report groups.`);
       render();
+      try { const history = await api('/api/runs'); if (current === generation) renderRuns(history); }
+      catch { if (current === generation) $('history-status').textContent = 'Worker history could not be loaded. Refresh to retry.'; }
     } catch (error) {
       if (current === generation) {
         status(error.name === 'TimeoutError' ? 'The server took too long to respond. Try refreshing.' : error.message, true);
@@ -74,6 +117,7 @@
   $('connect-form').addEventListener('submit', event => { event.preventDefault(); token = $('token').value; $('token').value = ''; refresh(); });
   $('refresh').addEventListener('click', refresh);
   $('disconnect').addEventListener('click', () => {
+    $('run-list').replaceChildren(); $('history-status').textContent = 'Connect to view the worker history.'; pendingUndo = null; if ($('undo-dialog').open) $('undo-dialog').close();
     generation++; token = ''; events = []; connected = false; busy = false; updated = 0;
     $('connection').textContent = 'Disconnected'; $('connection').className = 'connection';
     $('connect-panel').hidden = false; $('disconnect').hidden = true; $('refresh').disabled = true; $('connect').disabled = false;

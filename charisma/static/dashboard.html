@@ -16,6 +16,7 @@
     <nav aria-label="Main navigation">
       <a class="nav-link selected" href="#main"><span aria-hidden="true">◫</span> Overview</a>
       <a class="nav-link" href="#reports"><span aria-hidden="true">≡</span> Issue reports</a>
+      <a class="nav-link" href="#history"><span aria-hidden="true">↺</span> Agent history</a>
       <a class="nav-link" href="#installation"><span aria-hidden="true">+</span> Connect a website</a>
     </nav>
     <div class="side-note"><span class="side-label">THE WORKFLOW</span><ol><li>Observe your website</li><li>Investigate a report</li><li>Test a source change</li></ol><p>You decide what gets deployed.</p></div>
@@ -41,6 +42,13 @@
       <div class="empty" id="empty"><span class="empty-mark" aria-hidden="true">◫</span><h3 id="empty-title">A place for the details.</h3><p id="empty-description">Connect to view reports from your installed website monitor.</p></div>
       <p class="report-footnote">Shows up to 200 recent report groups. Reviewed means acknowledged, not fixed. A new occurrence reopens a report.</p>
     </section>
+    <section id="history" class="reports" aria-labelledby="history-title">
+      <div class="section-title"><div><p class="eyebrow">ACCOUNTABLE BY DESIGN</p><h2 id="history-title">Agent history</h2></div><span>Recorded activity</span></div>
+      <p id="history-status" class="report-footnote">Connect to view the worker history.</p>
+      <div id="run-list" class="event-list"></div>
+      <p class="report-footnote">Pause affects this project's repair workflow. Undo restores an unpublished candidate only; it does not roll back a deployed app or database.</p>
+    </section>
+    <dialog id="undo-dialog" aria-labelledby="undo-title" aria-describedby="undo-detail"><h2 id="undo-title">Undo this candidate?</h2><p id="undo-detail">Restore only the files prepared by this repair. Charisma will refuse if the candidate has changed or been committed. Your original source stays intact.</p><div class="actions"><button id="undo-cancel" class="secondary">Keep candidate</button><button id="undo-confirm">Undo candidate</button></div></dialog>
     <details class="installation" id="installation"><summary>Connect a website to Charisma <span aria-hidden="true">+</span></summary><div><p>Run the Charisma server, allow your website’s exact origin, and add its monitor script to your page. Use a fixed page label without visitor information.</p><pre><code>&lt;script defer src="https://YOUR-MONITOR/monitor.js"
   data-endpoint="https://YOUR-MONITOR/ingest"
   data-site-key="YOUR_PUBLIC_SITE_KEY"

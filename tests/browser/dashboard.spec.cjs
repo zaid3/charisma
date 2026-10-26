@@ -51,3 +51,23 @@ test('rendered website monitor sends a real error event without private details'
   const response=await request.get('/api/events',{headers:{Authorization:`Bearer ${token}`}});
   expect(await response.text()).not.toContain('private-user-input');
 });
+test('history expands its timeline and confirms candidate undo',async({page})=>{
+  let undone=false,paused=false;
+  await page.route('**/api/runs',route=>route.fulfill({json:{enabled:true,message:'Fixture worker history',runs:[{id:'aabbccddeeff0011',project:'Fixture website',commit_sha:'c'.repeat(40),status:undone?'candidate_undone':'awaiting_human_review',updated:1793040000,detail:'Fixture report',paused,can_undo:!undone,timeline:[{role:'independent_auditor',status:'approved',detail:'Focused fixture change',at:1793040000}]}]}})));
+  await page.route('**/api/runs/aabbccddeeff0011/*',route=>{
+    const action=route.request().url().split('/').pop();if(action==='undo')undone=true;else paused=action==='pause';
+    return route.fulfill({json:{status:'ok'}});
+  });
+  await connect(page);
+  await page.locator('#run-list summary').click();
+  await expect(page.locator('#run-list')).toContainText('independent auditor: approved');
+  await page.getByRole('button',{name:'Pause repairs',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Resume repairs',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Undo candidate',exact:true}).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button',{name:'Keep candidate',exact:true}).click();
+  expect(undone).toBe(false);
+  await page.getByRole('button',{name:'Undo candidate',exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:'Undo candidate',exact:true}).click();
+  await expect(page.locator('#run-list')).toContainText('candidate undone');
+});
