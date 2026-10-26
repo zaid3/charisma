@@ -85,6 +85,14 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.ingest({**EVENT,'file':'a'*5000})[0],400)
         self.assertEqual(self.ingest(**{'Content-Type':'text/plain'})[0],400)
 
+    def test_history_and_control_routes_require_admin_authentication(self):
+        self.assertEqual(self.request('GET','/api/runs')[0],401)
+        code,_,body=self.request('GET','/api/runs',headers={'Authorization':'Bearer '+TOKEN})
+        self.assertEqual(code,200);self.assertFalse(json.loads(body)['enabled'])
+        path='/api/runs/aabbccddeeff0011/undo'
+        self.assertEqual(self.request('POST',path)[0],401)
+        self.assertEqual(self.request('POST',path,headers={'Authorization':'Bearer '+TOKEN})[0],409)
+
     def test_static_routes_headers_and_preflight(self):
         for path in ['/','/dashboard.js','/dashboard.css','/monitor.js']:
             code,headers,body=self.request('GET',path)

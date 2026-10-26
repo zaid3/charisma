@@ -158,7 +158,7 @@ The platform specialist and auditor use model calls. Scouting, verification, rel
 ```sh
 python -m unittest discover -s tests -v
 node --test tests/monitor.test.cjs
-npm install
+npm ci
 npx playwright install chromium
 npm run test:browser
 ```

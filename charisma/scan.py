@@ -111,8 +111,8 @@ def scan_text(path: str, text: str) -> list[dict]:
             data = plistlib.loads(text.encode())
             ats = data.get('NSAppTransportSecurity', {}) if isinstance(data, dict) else {}
             if isinstance(ats, dict) and ats.get('NSAllowsArbitraryLoads') is True:
-                findings.append(finding('ios-arbitrary-loads', path, 1, 'iOS transport policy allows arbitrary loads',
-                    'Review transport exceptions against real endpoints. Verify changes with Xcode and device testing.', 'security', 'medium', 'high'))
+                findings.append(finding('ios-arbitrary-loads', path, 1, 'iOS transport exception needs review',
+                    'NSAllowsArbitraryLoads is enabled in this file. Other ATS keys and OS versions can override it. Review effective policy and endpoints with Xcode and device tests.', 'security', 'medium', 'medium'))
         except Exception:
             # Binary, malformed and non-plist files are outside this XML check.
             findings.append(finding('ios-plist-parse', path, 1, 'Property list could not be parsed',

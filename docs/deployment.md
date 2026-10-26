@@ -36,3 +36,5 @@ Start `charisma serve` separately from the repair runner. It listens on localhos
 The database is single-installation storage, not a multi-tenant platform. Repeat `--origin` only for websites you intend to share that installation and event list. Do not expose the pilot HTTP server directly to the internet.
 
 No production website, cloud service or app store is changed by following the local setup alone.
+
+Dashboard pause controls prevent the next repair phase; a command already running can finish. Resuming permits future eligible runs. If a pause interrupted an attempted run, inspect it and deliberately request a retry through a new project configuration revision; resuming does not repeat model requests automatically.
