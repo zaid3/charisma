@@ -20,3 +20,8 @@
     }
     respond "Unaffected fixture accounts" 200
 }
+
+:8082 {
+    bind 127.0.0.1
+    respond /health "ok" 200
+}

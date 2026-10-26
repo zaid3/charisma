@@ -27,7 +27,10 @@ services:
       - ./state:/data
     networks: [backplane]
   proxy:
-    image: caddy:2.11.7-alpine
+    build:
+      context: ..
+      dockerfile: deploy/Caddy.Dockerfile
+    image: charisma-gateway:0.2.0-rc.1
     restart: unless-stopped
     read_only: true
     user: "10001:10001"
@@ -48,6 +51,12 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy-data:/data
       - ./caddy-config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     depends_on:
       monitor:
         condition: service_healthy

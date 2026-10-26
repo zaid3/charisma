@@ -1,0 +1,9 @@
+{% comment %}
+  Render only after your storefront's existing consent policy allows reporting.
+  Replace the HTTPS monitor origin and public site key. Never use private tokens.
+  This is a storefront theme snippet, not a checkout/customer-events pixel.
+{% endcomment %}
+<script defer src="https://monitor.example.com/monitor.js"
+  data-endpoint="https://monitor.example.com/ingest"
+  data-site-key="your-public-installation-key"
+  data-page="storefront"></script>

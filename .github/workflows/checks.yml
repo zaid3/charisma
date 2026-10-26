@@ -47,3 +47,10 @@ jobs:
             test-results/
             playwright-report/
           retention-days: 7
+
+  wordpress:
+    name: WordPress loader syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker run --rm -v "$PWD/integrations/wordpress:/src:ro" php:8.3-cli php -l /src/charisma-monitor/charisma-monitor.php

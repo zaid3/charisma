@@ -31,3 +31,8 @@
     }
     reverse_proxy {$APP_UPSTREAM}
 }
+
+:8082 {
+    bind 127.0.0.1
+    respond /health "ok" 200
+}

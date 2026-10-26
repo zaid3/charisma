@@ -39,7 +39,7 @@ jobs:
           export CHARISMA_TEST_IMAGE="$(docker image inspect python:3.12-slim --format '{{index .RepoDigests 0}}')"
           PYTHONPATH="$PWD" python tests/integration/check_sandbox.py
       - name: Validate production proxy configuration
-        run: docker run --rm -e MONITOR_DOMAIN=monitor.fixture.test -e APP_DOMAIN=app.fixture.test -e APP_UPSTREAM=application:8080 -e CHARISMA_GATEWAY_TOKEN=fixture-token -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.7-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+        run: docker run --rm -e MONITOR_DOMAIN=monitor.fixture.test -e APP_DOMAIN=app.fixture.test -e APP_UPSTREAM=application:8080 -e CHARISMA_GATEWAY_TOKEN=fixture-token -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" charisma-gateway:0.2.0-rc.1 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: Capture diagnostics
         if: always()
         run: |

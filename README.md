@@ -1,6 +1,6 @@
 # Charisma
 
-**Monitoring, reviewed repairs and scoped protection for web, iOS and Android projects.**
+**Monitoring, reviewed repairs and scoped protection for websites, web apps, SaaS products, iOS and Android.**
 
 Charisma helps maintain applications you own or are authorised to manage. It brings runtime reports, source checks, small repair proposals, independent review and operational controls into one workflow. You can see what happened, review the evidence and decide whether to accept a change.
 
@@ -35,6 +35,12 @@ Charisma does not promise to find every bug, identify every attack or automatica
 | Security assessment | Real ZAP scans against an isolated CI fixture; import of existing scoped ZAP reports | Assess your actual deployment separately |
 
 The native SDKs do not intercept every crash. Runtime reports do not automatically map themselves to source lines or trigger repair commands. Mobile store releases, arbitrary backend deployments, general reverse engineering and complete application redesign are outside this release.
+
+## Website and platform coverage
+
+The browser monitor works with compatible websites and web apps across common stacks, including **WordPress, WooCommerce, Shopify storefronts, Wix and Node.js applications**. Integration examples and a WordPress loader plugin are included. Source repairs need access to supported project files; gateway/database controls need infrastructure access. Hosted platforms keep their own internal systems outside that scope.
+
+See the [platform guide and compatibility table](docs/platforms.md) for installation steps, SaaS isolation, framework navigation and Shopify/Wix restrictions. Support is based on the integration access available, not a promise of complete access to every website.
 
 ## Start locally
 
@@ -286,6 +292,7 @@ The badges link to current results. Browser screenshots and integration reports 
 
 ## Documentation and support
 
+* [Websites, SaaS, WordPress, Shopify, Wix and Node.js](docs/platforms.md)
 * [Production deployment and operations](docs/deployment.md)
 * [API, credentials and control integration](docs/api.md)
 * [iOS and Android SDKs](docs/native-sdks.md)
