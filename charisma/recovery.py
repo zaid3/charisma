@@ -25,7 +25,7 @@ def checksum(path: Path) -> str:
 
 def backup_sqlite(source: Path, output: Path) -> dict:
     source=source.absolute();output=output.absolute()
-    if source.is_symlink() or not source.is_file() or output.exists() or output.is_symlink():
+    if source.is_symlink() or not source.is_file() or output.exists() or output.is_symlink() or output.with_suffix(output.suffix+'.json').exists() or output.with_suffix(output.suffix+'.json').is_symlink():
         raise CharismaError('Back up an existing database to a new private file.')
     output.parent.mkdir(parents=True,exist_ok=True)
     descriptor=os.open(output,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600);os.close(descriptor)

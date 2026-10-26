@@ -195,9 +195,9 @@ def create_app():
     with Path(config_path).open('rb') as stream:config=tomllib.load(stream)
     public=config.get('public_origin','')
     if not public.startswith('https://'):raise CharismaError('Production requires an HTTPS public_origin.')
-    admin=secret('CHARISMA_ADMIN_TOKEN');gateway=secret('CHARISMA_GATEWAY_TOKEN');audit_key=secret('CHARISMA_AUDIT_KEY')
-    if len(set([v for v in (admin,gateway,audit_key) if v]))!=len([v for v in (admin,gateway,audit_key) if v]):
-        raise CharismaError('Use different admin, gateway and audit secrets.')
+    admin=secret('CHARISMA_ADMIN_TOKEN');gateway=secret('CHARISMA_GATEWAY_TOKEN');audit_key=secret('CHARISMA_AUDIT_KEY');reader=secret('CHARISMA_READ_TOKEN')
+    if len(set([v for v in (admin,gateway,audit_key,reader) if v]))!=len([v for v in (admin,gateway,audit_key,reader) if v]):
+        raise CharismaError('Use different operator, reader, gateway and audit secrets.')
     guard=GuardStore(Path(config.get('security_database','/data/security.sqlite3')),config['services'],audit_key) if config.get('services') else None
-    return Application(Settings(database=Path(config.get('database','/data/events.sqlite3')),origins=config['origins'],site_key=config['site_key'],admin_token=admin,read_token=secret('CHARISMA_READ_TOKEN'),gateway_token=gateway,guard=guard,public_origin=public,
+    return Application(Settings(database=Path(config.get('database','/data/events.sqlite3')),origins=config['origins'],site_key=config['site_key'],admin_token=admin,read_token=reader,gateway_token=gateway,guard=guard,public_origin=public,
         native_apps=config.get('native_apps',[]),trusted_proxies=config.get('trusted_proxies',[]),runner_state=Path(config['runner_state']) if config.get('runner_state') else None))

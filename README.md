@@ -1,33 +1,44 @@
 # Charisma
 
-**A small team of agents for keeping your web, iOS and Android projects in better shape.**
+**Monitoring, reviewed repairs and scoped protection for web, iOS and Android projects.**
 
-Charisma brings website reports, source checks and reviewed repair proposals into one workflow. A platform specialist prepares a change. A separate auditor challenges it. The verifier runs the tests you choose, and the release guard can open a draft pull request for you to review.
+Charisma helps maintain applications you own or are authorised to manage. It brings runtime reports, source checks, small repair proposals, independent review and operational controls into one workflow. You can see what happened, review the evidence and decide whether to accept a change.
 
 Created and maintained by **Ahtashamul Haque**.
 
 [![Checks](https://github.com/zaid3/charisma/actions/workflows/checks.yml/badge.svg)](https://github.com/zaid3/charisma/actions/workflows/checks.yml)
+[![Production candidate](https://github.com/zaid3/charisma/actions/workflows/production.yml/badge.svg)](https://github.com/zaid3/charisma/actions/workflows/production.yml)
+[![Dynamic assessment](https://github.com/zaid3/charisma/actions/workflows/assessment.yml/badge.svg)](https://github.com/zaid3/charisma/actions/workflows/assessment.yml)
 
-## Where the project stands
+## Release status
 
-This is the first working pilot. The local scanner, browser monitor, authenticated dashboard, separate specialist/auditor calls, worktree repairs and background runner are implemented. The browser script runs inside a website; the repair agents run beside its source repository.
+**0.2.0rc1 is a production deployment candidate.** The repository includes a deployable monitor, TLS gateway configuration, native reporting libraries, a supervised repair worker, recovery tools and integration tests. Hosting, application integration and release acceptance remain specific to your installation. Creating this repository does not start a hosted service.
 
-Charisma cannot find every bug or guarantee that a project is secure. Agent agreement is a review signal, not proof. Tests, platform builds and human review still matter.
+Charisma does not promise to find every bug, identify every attack or automatically repair every application. It keeps repairs small and records the checks used to assess them. The dashboard shows received data, rather than simulated activity.
 
-| Component | Available now | Boundary |
+## What is included
+
+| Capability | Implemented behaviour | Integration needed |
 | --- | --- | --- |
-| Website monitor | Browser error categories, rejected promises, selected rendered UX checks | No session replay, source maps or automatic runtime-to-source diagnosis |
-| Web specialist | Proposals for selected HTML and JavaScript findings | Requires a configured model and source access |
-| iOS specialist | Swift/Objective-C/plist source support, selected XML transport-policy checks | No native crash SDK; real app verification requires your Mac, Xcode and tests |
-| Android specialist | Kotlin/Java/XML source support, selected WebView and manifest checks | No native crash SDK; real app verification requires your Android build tools and tests |
-| Independent auditor | A separate model call reviews original and proposed code | Can still miss defects; an approval never bypasses tests |
-| Verifier | Runs operator-selected commands, rescans targets and rejects new built-in findings | Executes trusted project code on its host, not in a security sandbox |
-| Background runner | Polls configured checkouts and records each role's work | Must be hosted and configured to operate continuously |
-| Release guard | Opens a draft GitHub PR after verification when explicitly enabled | Never merges, deploys or publishes to an app store |
+| Website observation | Browser error categories, rejected promises and selected rendered usability checks | Add the browser script to an authorised website |
+| Native observation | Swift and Android Java libraries for explicit, bounded error reports | Call the library from your app's existing error handling |
+| Source analysis | Selected HTML, JavaScript, iOS transport-policy and Android WebView/manifest checks; SARIF import | Give the worker a clean local checkout |
+| Platform specialists | Separate web, iOS and Android repair instructions | Configure a compatible OpenAI model and key |
+| Independent audit | A fresh model request reviews original and proposed source | Optionally choose a different audit model |
+| Verification | Operator-selected tests, target rescan and rejection of new built-in findings | Supply actual project checks and platform toolchains |
+| Draft PRs | Verified candidate branches can become draft GitHub pull requests | Configure Git identity, `gh` and repository access |
+| Background work | Polling, duplicate-run prevention, stage history and pause/resume | Run on an available, supervised worker |
+| Gateway protection | Temporary service-specific IP blocks and manual service isolation | Route the protected service through the gateway |
+| Trusted incident signals | Optional automatic blocks after repeated backend-reported authentication failures | Instrument your backend; public telemetry cannot trigger a block |
+| Database isolation | PostgreSQL restrictive row policies for selected tenant scopes | Apply and test policies against your own schema |
+| Recovery | Unpublished candidate undo, verified SQLite backups and static-site release switching | Connect the relevant worker state, database or static release root |
+| Security assessment | Real ZAP scans against an isolated CI fixture; import of existing scoped ZAP reports | Assess your actual deployment separately |
+
+The native SDKs do not intercept every crash. Runtime reports do not automatically map themselves to source lines or trigger repair commands. Mobile store releases, arbitrary backend deployments, general reverse engineering and complete application redesign are outside this release.
 
 ## Start locally
 
-Python 3.11 or later and Git are required. The runtime has no third-party Python dependencies.
+Use Python 3.11 or later and Git. The core CLI has no third-party Python dependencies. The production server extra installs Gunicorn. Linux and macOS support the worker and recovery locks; iOS verification requires macOS with Xcode.
 
 ```sh
 git clone https://github.com/zaid3/charisma.git
@@ -38,168 +49,252 @@ python -m pip install -e .
 charisma --help
 ```
 
-You can also run `python -m charisma` directly from this checkout without installing it. Windows users can use `.venv\Scripts\Activate.ps1`; the background runner currently supports Linux and macOS.
+`python -m charisma` also works from this checkout. No model key is needed to scan source, inspect reports or try the offline HTML language repair.
 
-## Connect your website
-
-Generate a dashboard secret locally. Keep it out of your website and Git history:
+Start the **development** dashboard with a locally generated operator token:
 
 ```sh
-export CHARISMA_ADMIN_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-charisma serve \
-  --origin https://your-website.example \
-  --site-key your-public-installation-key
+export CHARISMA_ADMIN_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+charisma serve --origin http://localhost:3000 \
+  --site-key local-installation-key
 ```
 
-Open `http://127.0.0.1:8787` and enter that token. The dashboard displays real received reports; it starts empty.
+Open `http://127.0.0.1:8787` and enter the token from your local environment. It is held in memory for the current tab and cleared on disconnect or reload. The dashboard starts empty. The built-in development server is not the production entry point.
 
-For a hosted installation, put the server behind a TLS reverse proxy with connection limits, request-size limits and dashboard access controls. The bundled HTTP server is for local use and pilots, not a hardened public ingestion platform. See [deployment](docs/deployment.md).
+## Production deployment
 
-Add this script to a site you control, using your hosted monitor address:
+The [deployment guide](docs/deployment.md) covers Docker Compose, TLS, DNS, credentials, private networks, worker separation and upgrade checks. The included stack uses Gunicorn behind Caddy, separate credentials for each private role, a read-only container filesystem and persistent SQLite storage.
+
+Prepare the files on your own Linux server:
+
+```sh
+cp deploy/server.example.toml deploy/server.toml
+python deploy/prepare.py
+```
+
+Set your real monitor and application origins in `deploy/server.toml`. Set `MONITOR_DOMAIN`, `APP_DOMAIN` and `APP_UPSTREAM` in a private `deploy/.env` file. Follow the guide to assign directory ownership to container UID 10001, connect the application upstream and verify the configuration before starting:
+
+```sh
+docker compose --env-file deploy/.env -f deploy/compose.yml config --quiet
+docker compose --env-file deploy/.env -f deploy/compose.yml up --build -d
+```
+
+Only Caddy publishes network ports. The application must be reachable from Caddy, and direct access to the application's original upstream must be restricted if the gateway is to enforce protection. Keep an independently authenticated operator route available when isolating a service.
+
+This stack is a single installation. It does not provide customer account registration, billing, tenant-separated dashboards, SSO, a managed service-level agreement or a distributed high-availability database.
+
+## Connect a website
+
+Add the script to an authorised website after deploying your monitor:
 
 ```html
-<script defer src="https://YOUR-MONITOR/monitor.js"
-  data-endpoint="https://YOUR-MONITOR/ingest"
+<script defer src="https://monitor.example.com/monitor.js"
+  data-endpoint="https://monitor.example.com/ingest"
   data-site-key="your-public-installation-key"
   data-page="checkout"></script>
 ```
 
-The site key is public. **Never put the dashboard token or an API key in the script.** Configure each exact website origin with `--origin`. HTTP origins are allowed only for local development.
+Use the exact HTTPS website origin in the monitor's `origins` configuration. The installation key is public. Keep operator, reader, gateway and model credentials out of website code.
 
-The script checks the page after load. For client-side navigation, call `window.Charisma?.scan()` after the new view renders. `window.Charisma?.stop()` removes listeners and stops reports. Deploy it only after considering your site's consent and privacy requirements.
+The script checks rendered elements after load and reports selected issues such as missing image descriptions or field labels. These checks are limited heuristics, not a complete accessibility audit. After client-side navigation, call `window.Charisma?.scan()` once the new view has rendered. `window.Charisma?.stop()` removes listeners and prevents future reports.
 
-The dashboard lets you search, filter, refresh and acknowledge reports. Acknowledging a report does not fix it. Another occurrence reopens it.
+Reports exclude error messages, stack traces, full URLs, query strings, cookies, form values and DOM content. Use a fixed label such as `checkout`; never use a person's name, order number or email as a page label. See [privacy and retention](docs/privacy.md).
 
-## Scan a project
+The dashboard supports search, review status, report categories, refresh and acknowledgement. Acknowledgement marks an item as reviewed; it does not claim the defect has been fixed. A later occurrence reopens the item.
+
+## Connect iOS and Android
+
+The [native SDK guide](docs/native-sdks.md) includes installation and code examples.
+
+* **iOS:** the Swift package is in `sdk/ios`, supports iOS 15 or later, and provides an actor with `record(screen:category:)` and `stop()`.
+* **Android:** the Java library is in `sdk/android`, supports Android API 21 or later, and provides `record(screen)` and `close()`. Kotlin apps can use the same API.
+
+Both send explicit reports to `/ingest/native` using a configured public app identifier and installation key. Both require HTTPS, refuse redirects, bound requests and avoid automatic retries. They are not a substitute for the app's normal error handling or a full native crash-reporting service. Public app identifiers are not device attestation.
+
+## Scan source
 
 ```sh
 charisma scan /path/to/project \
-  --out /tmp/charisma-report.json \
-  --markdown /tmp/charisma-report.md
+  --out /private/charisma-report.json \
+  --markdown /private/charisma-report.md
 ```
 
-Use `--fail-on-findings` in CI if you want a nonzero exit code when findings exist. An incomplete scan returns exit code 2. Ordinary findings are review items; some patterns can be harmless in context.
+The scanner reads bounded source files and records scope, findings and incomplete reads. Use `--fail-on-findings` for a nonzero exit on findings. An incomplete scan returns exit code 2. Review findings in context: a matched pattern is not proof of an exploitable vulnerability.
 
-An existing SARIF 2.1.0 file can be included with `--sarif path/to/report.sarif`. Importing it does not run that scanner. Imported findings are displayed but are not automatically repaired in this version.
+Use `--sarif /private/report.sarif` to import an existing SARIF 2.1.0 report. Importing does not run its scanner. Imported findings are report-only and are not automatically repaired.
 
-## Prepare, review and verify a change
+## Prepare and verify a repair
 
-Start with a clean, committed Git checkout. Keep reports outside it, or add `.charisma/` to the project's ignore file.
+Start with a clean, committed checkout. Keep reports outside the project or ignore the project's `.charisma/` directory.
 
-An offline repair is available for missing HTML document language. Supply the language the page actually uses:
+For a missing HTML document language, provide the page's actual language. This deterministic repair needs no model:
 
 ```sh
-charisma plan /path/to/project --report /tmp/charisma-report.json \
-  --language en-GB --out /tmp/charisma-plan.json
+charisma plan /path/to/project --report /private/charisma-report.json \
+  --language en-GB --out /private/charisma-plan.json
 ```
 
-For a model-assisted proposal, configure an OpenAI API key and a model available to your account that supports Responses structured outputs. The key is read from `OPENAI_API_KEY`; choose the model with `CHARISMA_MODEL`. Set `CHARISMA_AUDIT_MODEL` to use a different model for review, or omit it to use the same model in an independent request.
+For model-assisted work, configure `OPENAI_API_KEY` and `CHARISMA_MODEL` privately on the worker. Choose a model available to your account that supports Responses structured outputs. `CHARISMA_AUDIT_MODEL` can select a different auditor model; when omitted, a separate request uses the specialist's model.
 
 ```sh
-charisma plan /path/to/project --report /tmp/charisma-report.json \
-  --platform web --allow-model --out /tmp/charisma-plan.json
+charisma plan /path/to/project --report /private/charisma-report.json \
+  --platform web --allow-model --out /private/charisma-plan.json
 ```
 
-Use `ios` or `android` for the other specialists. Select particular findings by repeating `--finding FINDING_ID`. Each plan is limited to three existing source files from one platform. It makes at most one proposal request and one audit request, without automatic retries. Model usage may incur provider charges.
+Use `ios` or `android` for native projects. Repeat `--finding FINDING_ID` to select related built-in findings. A plan can modify at most three existing source files from one platform. It cannot add shell commands, modify protected test/configuration paths or authorise publication. Each plan makes at most one specialist request and one auditor request, without automatic retries. Provider usage may incur charges.
 
-Only selected source files and finding descriptions are sent to the model provider. The auditor receives original and proposed source in a new request, without the specialist's reasoning. A refusal, incomplete response, rejected audit or invalid change blocks the plan. Review the saved plan before applying it.
+Inspect the plan, then apply it to a separate Git worktree:
 
 ```sh
-charisma apply /path/to/project --plan /tmp/charisma-plan.json \
-  --worktree /path/to/charisma-candidate
+charisma apply /path/to/project --plan /private/charisma-plan.json \
+  --worktree /srv/candidates/my-project
 
-charisma verify /path/to/charisma-candidate \
-  --test "npm test" --test "npm run build" --trust-tests
+charisma verify /srv/candidates/my-project \
+  --test "npm test" --test "npm run build" --trust-tests \
+  --container-image 'your-prepared-test-image@sha256:REPLACE_WITH_64_HEX_DIGEST'
 ```
 
-Replace those commands with your project's actual checks. No checks are silently skipped. For iOS, use your real `xcodebuild test` command on macOS. For Android, use appropriate Gradle tests, lint and device tests. The agent does not invent an app scheme, emulator or signing configuration.
+Prepare and pull your own test image in advance, with the project's dependencies available. The digest above is a placeholder. Container checks run without network access, host credentials, added capabilities or a writable root filesystem. Only the candidate is mounted writable. Tests that need downloads will fail until you prepare their dependencies. See [test execution boundaries](docs/architecture.md).
 
-Changes go into a new Git worktree and branch. Your original working files stay untouched. Verification fails if a target remains, a configured command fails, the candidate changes unexpectedly, or new built-in findings appear.
+Without `--container-image`, tests run on the host with a reduced environment. This is suitable only for a trusted, isolated worker. Native iOS checks need an isolated Mac with the project's actual Xcode scheme and simulator; a Linux container cannot verify an iOS app. No command is silently treated as passed.
 
-To publish a verified candidate, install and authenticate the GitHub CLI first:
-
-```sh
-charisma publish /path/to/charisma-candidate \
-  --repo your-account/your-project --title "Improve reviewed website behaviour"
-```
-
-This uses your existing Git identity and GitHub access. It commits only the prepared files, pushes the candidate branch and opens a **draft** pull request. Review the diff and your normal CI before merging.
-
-## Run an agent team in the background
-
-Copy [the runner configuration](examples/runner/charisma.toml), then set real absolute paths and test commands. Start with scan mode:
-
-```sh
-charisma watch --config /path/to/charisma.toml --once
-charisma watch --config /path/to/charisma.toml
-```
-
-Repair mode requires `--allow-model --trust-tests`. Automatic draft PR creation additionally requires `publish = true`, the correct repository in configuration, and `--allow-publish`.
-
-The runner checks local committed source; it does **not** fetch or pull remote changes. Update the checkout through your own trusted CI or deployment process. Each configured project/commit/configuration is attempted once, including failures, to prevent repeat spending. A new commit or changed project configuration creates a new run. A mixed repository can have separate entries for web, iOS and Android.
-
-Each run records its scan, approved plan, role activity and worktree. Failed model calls and rejected audits block the run. Evidence and candidate worktrees remain available for inspection. Use a service manager on an always-on host to keep it running; see [deployment](docs/deployment.md). Nothing becomes continuously hosted simply by creating the GitHub repository.
+Verification fails when a selected issue remains, a command fails, source changes unexpectedly or a new built-in finding appears. A passing result establishes only the recorded checks for that candidate.
 
 ## Agent responsibilities
 
-| Role | Responsibility | Who checks its work |
+| Role | Work performed | Check on its work |
 | --- | --- | --- |
-| Scout | Collects bounded source findings | Specialist reviews context; report records scope |
-| Web / iOS / Android specialist | Proposes a small platform-specific repair | Independent auditor |
-| Independent auditor | Challenges correctness, security and scope | Verifier tests the approved candidate; human reviews the diff |
-| Verifier | Runs trusted checks and compares scan results | Release guard checks the recorded candidate and outcomes |
-| Release guard | Permits a draft PR only after the gates pass | Repository CI and the maintainer before merge |
-| Coordinator | Routes configured projects and records progress | Persistent run history and explicit operator configuration |
+| Scout | Collects bounded source findings | Recorded scan scope and specialist context review |
+| Web, iOS or Android specialist | Proposes a focused source change | Independent auditor receives original and proposed files |
+| Independent auditor | Reviews correctness, security and scope in a fresh request | Tests and rescan must still pass |
+| Verifier | Executes operator-selected checks and compares findings | Candidate hashes and release checks |
+| Release guard | Allows a verified candidate to become a draft PR | Repository CI and maintainer review |
+| Coordinator | Routes projects, prevents repeat runs and records stages | Persistent history and explicit configuration |
 
-The platform specialist and auditor use model calls. Scouting, verification, release checks and scheduling are deterministic Python components. They do not pretend to be additional intelligent models.
+Specialists and auditors make model calls. Scouting, scheduling, verification and release checks are deterministic components. Independent requests can still share the same blind spots; agreement is not a guarantee.
 
-## Development
+## Background operation and GitHub
 
-```sh
-python -m unittest discover -s tests -v
-node --test tests/monitor.test.cjs
-npm ci
-npx playwright install chromium
-npm run test:browser
-```
-
-CI runs the Python suite, SDK tests, package checks and desktop/mobile browser tests. No API key is needed for CI. Provider and audit boundaries are tested with fixtures; a paid live model run, an actual iOS app build, Android app build and authenticated draft-PR publication are separate integration checks requiring your configured environment.
-
-See [architecture and trust boundaries](docs/architecture.md), [privacy](docs/privacy.md), and [security reporting](SECURITY.md).
-
-## Licence
-
-[Apache License 2.0](LICENSE). This permits commercial reuse subject to the licence terms. Hosted services, support and custom integrations can be offered separately; this repository does not include a billing system.
-
-## Activity history and recovery
-
-Connect the monitor dashboard to the same private state directory as the worker:
+Copy [the runner example](examples/runner/charisma.toml), set existing absolute checkout paths, and start in scan mode:
 
 ```sh
-charisma serve --origin https://your-website.example \
-  --site-key your-public-installation-key \
-  --runner-state /var/lib/charisma/runs
+charisma watch --config /private/charisma.toml --once
+charisma watch --config /private/charisma.toml
 ```
 
-The **Agent history** section shows each recorded run, its commit, current stage, timestamp and expandable role timeline. Pause/resume controls affect future repair phases for that project. A running model call or test can finish before the pause takes effect.
+Repair mode requires `--allow-model --trust-tests`. Set `production = true` for production workers: repair projects then require a pinned `test_image`, or an iOS project with `isolated_native_worker = true` on a genuinely isolated Mac.
 
-**Undo candidate** restores only the recorded, unpublished repair files to their base commit. It checks for unexpected edits and refuses to overwrite later human work or a committed candidate. This is not a rollback of a live website, mobile release or database. Application rollback, backups and per-service quarantine need deployment-specific integrations that are not included yet.
+The runner processes configured projects sequentially and attempts each project/commit/configuration once, including failed attempts. It does not pull remote repositories. Update the checkout through your trusted CI process. To retry a reviewed failure deliberately, change that project's configuration revision or source commit.
 
-## Investigate unusual server activity
+For draft PR publication, configure Git identity and authenticate GitHub CLI on the worker:
 
-Charisma can triage an authorised local server-log slice without contacting any source address:
+```sh
+charisma publish /srv/candidates/my-project \
+  --repo your-account/your-project --title "Resolve reviewed application findings"
+```
+
+Background publication also requires `publish = true`, `repository = "owner/name"` and `--allow-publish`. Charisma never merges these PRs or deploys a model-generated change. Keep signing and production release credentials outside the worker.
+
+Continuous operation requires an available host and supervision. [A Linux systemd example](examples/runner/charisma.service) is supplied. The default polling interval is 15 minutes, configurable from 60 seconds to one day. This is scheduled maintenance, not a promise that every runtime event triggers an immediate repair.
+
+## History, pause and recovery
+
+Set `runner_state` in the server configuration, or use `charisma serve --runner-state /private/runner-state` locally, to connect history. The server needs the appropriate state and worktree access; the default deployment deliberately keeps the repair worker separate. The deployment guide describes the tradeoff before enabling worker controls.
+
+History shows stages, timestamps, commits and recorded details. Pause prevents the next repair phase; an already-running request or test can finish. Resume permits future eligible work. **Undo candidate** restores only the recorded, unpublished candidate files after checking for later edits. It refuses to overwrite subsequent human work or committed candidates.
+
+The separate [recovery guide](docs/recovery.md) covers:
+
+* Consistent SQLite backups with checksums and integrity checks.
+* Offline restoration with an expected-current checksum and a preserved pre-restore backup.
+* Immutable static-site releases, atomic activation and switching back to a verified earlier version.
+
+These are explicit operator actions. A source candidate undo, a static-site rollback and a database restore have different effects. None reverses an App Store or Play Store release.
+
+## Gateway protection and service isolation
+
+Configure explicit service identifiers in `server.toml`. The supplied Caddy route uses the `website` service. Additional routes must supply their own configured service identifier and the actual client IP from a trusted network boundary.
+
+An authenticated operator can review and apply a temporary IP block, unblock an address, isolate a service or resume it from the dashboard. Leases last 30 to 3,600 seconds. Controls affect only the selected service and expire automatically when their timestamp passes. A service isolation rejects every request through that service's protected route, including legitimate traffic; keep a separate management route available.
+
+Automatic blocking is **off by default**. When enabled, it uses repeated `auth_failure` signals submitted by your backend with a private gateway credential. Configure the threshold, observation window, duration and protected operator networks. Replayed signal IDs are ignored while retained. Ordinary server errors and public browser/native reports cannot create automatic blocks.
+
+The gateway checks policy before forwarding a request. It is not a general web application firewall, malware detector or DDoS service. If the policy service is unavailable, the supplied gateway does not forward the protected request. Measure and plan for this availability dependency.
+
+See the [API and control guide](docs/api.md) for exact headers and payloads. The [PostgreSQL isolation guide](docs/database-isolation.md) explains how an administrator can restrict one tenant scope without disconnecting every tenant. The SQL integration is explicit and does not discover or rewrite your database schema.
+
+## Incident evidence and security reports
+
+Analyse a bounded, authorised local server log without contacting source addresses:
 
 ```sh
 charisma triage --log /private/server.ndjson \
   --out /private/incident.json --markdown /private/incident.md
 ```
 
-Each newline-delimited JSON record needs `source_ip`, integer `status`, and an ISO timestamp with a timezone, for example:
+Each line needs `source_ip`, integer `status` and a timezone-aware ISO timestamp:
 
 ```json
 {"source_ip":"192.0.2.10","status":401,"timestamp":"2026-10-26T12:00:00Z"}
 ```
 
-The report includes an evidence hash, observed response counts, timestamps, possible impact, unconfirmed causes and suggested investigation steps. Repeated access denials, rate limits or server errors are signals to investigate, not proof of an attacker. Other fields such as full paths, user details and tokens are not copied into the report.
+Reports include an evidence hash, observed counts, timestamps, possible impact, unconfirmed causes and investigation steps. An IP address identifies an observed network source, not a person. Charisma does not deploy programs onto visitors' devices, collect a suspected person's private details or retaliate.
 
-It does not identify a person behind an IP address, install a tracking program, perform retaliation or automatically block visitors. Gateway blocking, production isolation and full penetration testing remain separate integrations requiring a defined authorised scope. A source scan or log report is labelled accurately and is never presented as a completed penetration test.
+The **Isolated dynamic assessment** workflow runs ZAP against a disposable copy of Charisma on an internal Docker network. Normal pushes use a baseline scan. Manual workflow dispatch offers an active scan of that same fixed fixture, with no arbitrary target input. The workflow retains the actual scanner evidence and rejects high-risk observations. It does not assess your live app or establish that every authenticated workflow is secure.
+
+Import an existing authorised ZAP JSON report with:
+
+```sh
+charisma import-zap --report /private/zap.json \
+  --target https://your-authorised-app.example \
+  --out /private/assessment.json --markdown /private/assessment.md
+```
+
+The importer checks report scope, records the source hash and labels the result as an automated assessment. It does not execute a scanner or certify a complete manual penetration test.
+
+## Credentials and data boundaries
+
+| Value | Purpose | Where it belongs |
+| --- | --- | --- |
+| Public site key and native app ID | Identify the installation receiving telemetry | Website or native app configuration |
+| Reader token | View events, history and security controls | Authorised viewer's private session |
+| Operator token | View and mutate controls | Authorised operator's private session |
+| Gateway token | Policy checks and trusted backend signals | Proxy/backend secret storage |
+| Audit key | Authenticate the local protection history chain | Server secret storage and protected backup |
+| OpenAI API key | Optional proposal and audit requests | Repair worker only |
+| GitHub credentials | Optional draft PR publication | Repository-scoped worker access |
+
+Private roles require different tokens. The monitor does not need a model key or GitHub write access. HTTP bodies are limited to 4,096 bytes. Telemetry, rate-limit storage, gateway signals and audit records have different retention rules; read [privacy](docs/privacy.md) before deployment.
+
+## Development and verification
+
+```sh
+python -m unittest discover -s tests -v
+node --test tests/monitor.test.cjs
+npm ci --ignore-scripts
+npx playwright install chromium
+npm run test:browser
+```
+
+| CI workflow | What it exercises |
+| --- | --- |
+| Checks | Python 3.11/3.12/3.13, package installation, browser SDK behaviour, desktop/mobile dashboard interactions |
+| Production candidate | Actual container gateway, service-scoped controls, isolated Docker checks, PostgreSQL row policies, Swift tests/iOS simulator compilation, Java tests/Android API compilation and DEX generation |
+| Isolated dynamic assessment | Actual ZAP output for the disposable monitor fixture, scoped report import and severity gate |
+
+The badges link to current results. Browser screenshots and integration reports are uploaded as short-lived workflow artifacts. Model calls use fixtures in CI; a paid live provider call is not part of these checks. SDK compilation is not evidence that your own app has been integrated, signed, tested on devices or accepted by an app store. Run installation-specific acceptance tests before exposing a live service.
+
+## Documentation and support
+
+* [Production deployment and operations](docs/deployment.md)
+* [API, credentials and control integration](docs/api.md)
+* [iOS and Android SDKs](docs/native-sdks.md)
+* [Backups and recovery](docs/recovery.md)
+* [PostgreSQL scope isolation](docs/database-isolation.md)
+* [Architecture and trust boundaries](docs/architecture.md)
+* [Privacy and retention](docs/privacy.md)
+* [Security reporting](SECURITY.md) and [contribution guidance](CONTRIBUTING.md)
+
+## Licence
+
+[Apache License 2.0](LICENSE). It permits commercial reuse subject to its terms. Hosted services, support and custom integrations can be offered separately. This repository does not include a billing system or impose a noncommercial restriction.

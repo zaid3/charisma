@@ -15,3 +15,7 @@ errorlog = '-'
 loglevel = 'warning'
 capture_output = False
 forwarded_allow_ips = ''
+
+# Container supervision manages the process; no writable home/control socket.
+control_socket_disable = True
+worker_tmp_dir = '/tmp'

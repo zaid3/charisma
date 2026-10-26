@@ -71,3 +71,18 @@ class AgentTests(GitFixture, unittest.TestCase):
         with runner_lock(self.directory/'state'):
             with self.assertRaises(CharismaError):
                 with runner_lock(self.directory/'state'): pass
+
+    def test_offline_plan_cannot_smuggle_an_unreviewed_source_change(self):
+        forged=copy.deepcopy(self.plan)
+        forged['changes'][0]['content'] += '<script>unexpected()</script>'
+        with self.assertRaises(CharismaError): apply_plan(self.root,forged,self.work)
+        self.assertFalse(self.work.exists())
+
+    def test_production_worker_rejects_missing_or_unpinned_isolation(self):
+        config=self.directory/'production.toml'
+        base=f'production=true\nstate_directory={json.dumps(str(self.directory/"state"))}\n[[projects]]\nname="web"\npath={json.dumps(str(self.root))}\nmode="repair"\nplatform="web"\ntests=["python check.py"]\n'
+        for suffix in ['', 'test_image="python:latest"\n']:
+            config.write_text(base+suffix)
+            with self.assertRaises(CharismaError): read_config(config)
+        config.write_text(base+'test_image="python@sha256:'+'a'*64+'"\n')
+        self.assertTrue(read_config(config)['production'])

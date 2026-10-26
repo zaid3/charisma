@@ -4,6 +4,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import time
@@ -44,6 +45,9 @@ def read_config(path: Path) -> dict:
         if config.get('production',False) and project.get('mode') == 'repair' and not project.get('test_image'):
             if project.get('platform') != 'ios' or project.get('isolated_native_worker') is not True:
                 raise CharismaError('Production repair workers require a pinned test_image or an explicitly isolated iOS worker.')
+        image=project.get('test_image')
+        if image is not None and (not isinstance(image,str) or not re.fullmatch(r'[A-Za-z0-9./:_-]+@sha256:[0-9a-f]{64}',image)):
+            raise CharismaError('Configure a test image pinned by its sha256 digest.')
         tests=project.get('tests',[])
         if not isinstance(tests,list) or any(not isinstance(t,str) or not t.strip() for t in tests) or (project.get('mode') == 'repair' and not tests):
             raise CharismaError('Repair mode requires explicit trusted test commands.')

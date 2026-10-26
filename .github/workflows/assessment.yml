@@ -35,6 +35,18 @@ jobs:
           sudo chown 10001:10001 /tmp/charisma-assessment-data
           sudo chown 1000:1000 assessment-evidence
           docker run -d --name monitor --network charisma-assessment --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp -v /tmp/charisma-assessment-data:/data -v "$PWD/tests/integration/server.toml:/etc/charisma/server.toml:ro" -e CHARISMA_ADMIN_TOKEN=assessment-admin-token-32-characters -e CHARISMA_GATEWAY_TOKEN=assessment-gateway-token-32-characters -e CHARISMA_AUDIT_KEY=assessment-independent-audit-key-32-characters charisma-assessment
+      - name: Require the target to be healthy
+        run: |
+          docker exec -i monitor python - <<'PY'
+          import time,urllib.request
+          for attempt in range(30):
+              try:
+                  urllib.request.urlopen('http://127.0.0.1:8787/ready',timeout=2)
+                  break
+              except Exception:
+                  if attempt==29:raise
+                  time.sleep(1)
+          PY
       - name: Assess only the isolated fixture
         env:
           SCAN_MODE: ${{ inputs.mode || 'passive' }}
@@ -59,6 +71,8 @@ jobs:
           report=import_zap(Path('assessment-evidence/zap.json'),'http://monitor:8787')
           write_json(Path('assessment-evidence/assessment.json'),report)
           write_private(Path('assessment-evidence/assessment.md'),assessment_markdown(report))
+          if not report['reported_endpoint_count']:
+              raise SystemExit('The scanner report must record at least one assessed target endpoint.')
           if any(f['severity']=='high' for f in report['findings']):
               raise SystemExit('High-risk scanner observations require review.')
           PY

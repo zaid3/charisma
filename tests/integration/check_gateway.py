@@ -1,5 +1,6 @@
 """Tests only the disposable localhost containers launched by CI."""
 import json
+import os
 import time
 import urllib.request
 import urllib.error
@@ -11,7 +12,8 @@ def request(port,path='/',data=None,token=None,headers=None):
     headers=headers or {}
     if token:headers['Authorization']='Bearer '+token
     if data is not None:headers['Content-Type']='application/json'
-    req=urllib.request.Request(f'http://127.0.0.1:{port}{path}',data=json.dumps(data).encode() if data is not None else None,headers=headers)
+    base={18787:os.environ.get('FIXTURE_MONITOR','http://127.0.0.1:18787'),18080:os.environ.get('FIXTURE_WEBSITE','http://127.0.0.1:18080'),18081:os.environ.get('FIXTURE_ACCOUNTS','http://127.0.0.1:18081')}[port]
+    req=urllib.request.Request(base+path,data=json.dumps(data).encode() if data is not None else None,headers=headers)
     try:
         with urllib.request.urlopen(req,timeout=5) as response:return response.status,response.read()
     except urllib.error.HTTPError as error:return error.code,error.read()

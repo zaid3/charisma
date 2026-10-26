@@ -29,17 +29,17 @@ jobs:
           docker run -d --name proxy --network charisma-fixture -p 127.0.0.1:18080:8080 -p 127.0.0.1:18081:8081 -v "$PWD/tests/integration/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.7-alpine
       - name: Wait for readiness and verify gateway controls
         run: |
-          python - <<'PY'
+          docker exec -i monitor python - <<'PY'
           import time,urllib.request
           for attempt in range(30):
               try:
-                  urllib.request.urlopen('http://127.0.0.1:18787/ready',timeout=2)
+                  urllib.request.urlopen('http://127.0.0.1:8787/ready',timeout=2)
                   break
               except Exception:
                   if attempt==29: raise
                   time.sleep(1)
           PY
-          python tests/integration/check_gateway.py
+          docker run --rm --network charisma-fixture --read-only --cap-drop ALL -e FIXTURE_MONITOR=http://monitor:8787 -e FIXTURE_WEBSITE=http://proxy:8080 -e FIXTURE_ACCOUNTS=http://proxy:8081 -v "$PWD/tests/integration/check_gateway.py:/tmp/check_gateway.py:ro" charisma-under-test python /tmp/check_gateway.py
       - name: Verify configured test isolation
         run: |
           docker pull python:3.12-slim

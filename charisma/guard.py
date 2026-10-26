@@ -22,6 +22,7 @@ class GuardStore:
             raise CharismaError('Configure a separate audit key with at least 32 characters.')
         if not services or len(services) > 100:
             raise CharismaError('Configure between one and 100 explicit service identifiers.')
+        services={name:dict(policy) if isinstance(policy,dict) else policy for name,policy in services.items()}
         self.path, self.services, self.key = path, services, audit_key.encode()
         for name, policy in services.items():
             if not SERVICE.fullmatch(name) or not isinstance(policy, dict):
@@ -83,6 +84,8 @@ class GuardStore:
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             db.execute('DELETE FROM signals WHERE received < ?',(now-86400,))
+            db.execute('DELETE FROM blocks WHERE expires<=?',(now,))
+            db.execute('DELETE FROM quarantine WHERE expires<=?',(now,))
             if db.execute('SELECT COUNT(*) FROM signals').fetchone()[0] >= 100000:
                 raise CharismaError('The signal buffer is full. Inspect the gateway before accepting more signals.')
             inserted=db.execute('INSERT OR IGNORE INTO signals VALUES(?,?,?,?,?)',(event['id'],service,source,event['kind'],now)).rowcount

@@ -1,6 +1,7 @@
 # Replace paths with real clean checkouts. No remote fetch occurs automatically.
 state_directory = "/var/lib/charisma/runs"
 interval_seconds = 900
+production = true
 
 [[projects]]
 name = "website"
@@ -9,6 +10,8 @@ platform = "web"
 mode = "scan"
 tests = ["npm test", "npm run build"]
 publish = false
+# Required before switching web/Android projects to mode = "repair":
+# test_image = "your-prepared-image@sha256:REPLACE_WITH_64_HEX_DIGEST"
 # repository = "your-account/website"
 
 # Add native projects only on workers with their real build tools and tests.
@@ -16,6 +19,7 @@ publish = false
 # name = "ios-app"
 # path = "/Users/worker/projects/ios-app"
 # platform = "ios"
+# isolated_native_worker = true # Only on a genuinely isolated Mac or VM.
 # mode = "scan"
 # tests = ["xcodebuild test -scheme YourActualScheme -destination 'platform=iOS Simulator,name=YourActualSimulator'"]
 
