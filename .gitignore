@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.charisma/
+*.sqlite3
+*.sqlite3-*
+.env
+.env.*
+!.env.example
+build/
+dist/
+*.egg-info/
+node_modules/
+playwright-report/
+test-results/

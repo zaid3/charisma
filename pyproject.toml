@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "charisma-web-agent"
+version = "0.1.0"
+description = "Website monitoring and verified maintenance workflows for projects you control"
+requires-python = ">=3.11"
+authors = [{name = "Ahtashamul Haque"}]
+dependencies = []
+readme = "README.md"
+license = {file = "LICENSE"}
+
+[project.urls]
+Homepage = "https://github.com/zaid3/charisma"
+Issues = "https://github.com/zaid3/charisma/issues"
+
+[project.scripts]
+charisma = "charisma.cli:main"
+
+[tool.setuptools.package-data]
+charisma = ["static/*.js", "static/*.html", "static/*.css"]
+
+[tool.setuptools.packages.find]
+include = ["charisma*"]

@@ -1,0 +1,27 @@
+# Replace paths with real clean checkouts. No remote fetch occurs automatically.
+state_directory = "/var/lib/charisma/runs"
+interval_seconds = 900
+
+[[projects]]
+name = "website"
+path = "/srv/projects/website"
+platform = "web"
+mode = "scan"
+tests = ["npm test", "npm run build"]
+publish = false
+# repository = "your-account/website"
+
+# Add native projects only on workers with their real build tools and tests.
+# [[projects]]
+# name = "ios-app"
+# path = "/Users/worker/projects/ios-app"
+# platform = "ios"
+# mode = "scan"
+# tests = ["xcodebuild test -scheme YourActualScheme -destination 'platform=iOS Simulator,name=YourActualSimulator'"]
+
+# [[projects]]
+# name = "android-app"
+# path = "/srv/projects/android-app"
+# platform = "android"
+# mode = "scan"
+# tests = ["./gradlew test lint"]

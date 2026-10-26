@@ -1,0 +1,19 @@
+[Unit]
+Description=Charisma project observer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=charisma
+WorkingDirectory=/srv/charisma
+EnvironmentFile=/etc/charisma/worker.env
+ExecStart=/srv/charisma/.venv/bin/charisma watch --config /etc/charisma/charisma.toml
+Restart=on-failure
+RestartSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
