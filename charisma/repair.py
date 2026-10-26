@@ -241,12 +241,14 @@ def run_check(worktree: Path, argv: list[str], timeout: int = 300, container_ima
     env = {k: v for k, v in os.environ.items() if k in {'PATH', 'LANG', 'LC_ALL', 'SYSTEMROOT', 'TMPDIR', 'TEMP', 'TMP'}}
     env['CI'] = 'true'
     command = list(argv)
+    container_name = None
     if container_image:
         if not re.fullmatch(r'[A-Za-z0-9./:_-]+@sha256:[0-9a-f]{64}',container_image):
             raise CharismaError('Use a pre-pulled test image pinned by its sha256 digest.')
         if not shutil.which('docker'):
             raise CharismaError('Docker is required for the configured isolated tests.')
-        command = ['docker','run','--rm','--pull=never','--network=none','--read-only','--cap-drop=ALL',
+        container_name = 'charisma-test-' + uuid.uuid4().hex[:16]
+        command = ['docker','run','--name',container_name,'--rm','--pull=never','--network=none','--read-only','--cap-drop=ALL',
                    '--security-opt=no-new-privileges','--pids-limit=128','--memory=2g','--cpus=2',
                    '--user',f'{os.getuid()}:{os.getgid()}','--tmpfs','/tmp:rw,nosuid,size=256m',
                    '--mount',f'type=bind,src={worktree.resolve()},dst=/work','--workdir','/work',container_image,*argv]
@@ -274,6 +276,8 @@ def run_check(worktree: Path, argv: list[str], timeout: int = 300, container_ima
         else:
             process.kill()
         process.wait()
+    if container_name:
+        subprocess.run(['docker','rm','--force',container_name],capture_output=True,timeout=15,env=env)
     reader.join(timeout=2)
     if reader.is_alive() and os.name != 'nt':
         try:

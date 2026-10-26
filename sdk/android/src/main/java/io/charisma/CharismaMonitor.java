@@ -11,6 +11,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 
 /** Explicit Android error reporting. No messages, stack traces, device IDs or user data. */
 public final class CharismaMonitor implements AutoCloseable {
@@ -31,8 +32,10 @@ public final class CharismaMonitor implements AutoCloseable {
         } catch (Exception error) { throw new IllegalArgumentException("Use an HTTPS endpoint, fixed app identifier and public site key"); }
         if (transport == null) throw new IllegalArgumentException("Transport is required");
         this.appId = appId; this.siteKey = siteKey; this.transport = transport;
-        executor = new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<Runnable>(30), runnable -> {
-            Thread thread = new Thread(runnable, "charisma-monitor"); thread.setDaemon(true); return thread;
+        executor = new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<Runnable>(30), new ThreadFactory() {
+            @Override public Thread newThread(Runnable runnable) {
+                Thread thread = new Thread(runnable, "charisma-monitor"); thread.setDaemon(true); return thread;
+            }
         },new ThreadPoolExecutor.AbortPolicy());
     }
 
@@ -41,14 +44,16 @@ public final class CharismaMonitor implements AutoCloseable {
         if (closed || screen == null || !screen.matches("[A-Za-z0-9_-]{1,40}") || seen.size() >= 30 || !seen.add(screen)) return false;
         final byte[] payload = ("{\"code\":\"android-error\",\"error\":\"Unknown\",\"file\":\"\",\"line\":0,\"column\":0,\"count\":1,\"page\":\"" + screen + "\"}").getBytes(StandardCharsets.UTF_8);
         try {
-            executor.execute(() -> { try { transport.send(endpoint, appId, siteKey, payload); } catch (Exception ignored) { /* No recursive error reporting or retries. */ } });
+            executor.execute(new Runnable() { @Override public void run() {
+                try { transport.send(endpoint, appId, siteKey, payload); } catch (Exception ignored) { /* No recursive error reporting or retries. */ }
+            } });
             return true;
         } catch (java.util.concurrent.RejectedExecutionException ignored) { return false; }
     }
 
     /** Test/controlled-shutdown helper; do not wait on the UI thread. */
     public boolean awaitIdle(long timeoutMillis) throws Exception {
-        Future<?> barrier = executor.submit(() -> {});
+        Future<?> barrier = executor.submit(new Runnable() { @Override public void run() {} });
         barrier.get(timeoutMillis, TimeUnit.MILLISECONDS); return true;
     }
     @Override public synchronized void close() { closed = true; executor.shutdownNow(); }

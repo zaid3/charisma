@@ -46,7 +46,7 @@ def parser() -> argparse.ArgumentParser:
     pr.add_argument('worktree', type=Path)
     pr.add_argument('--repo', required=True)
     pr.add_argument('--title', default='Resolve reviewed website findings')
-    serve = commands.add_parser('serve', help='Start the pilot monitor and dashboard')
+    serve = commands.add_parser('serve', help='Start the local development monitor and dashboard')
     serve.add_argument('--origin', action='append', required=True, help='Exact allowed website origin; repeat as needed')
     serve.add_argument('--site-key', required=True, help='Public installation identifier, not the dashboard secret')
     serve.add_argument('--database', type=Path, default=Path('.charisma/events.sqlite3'))
@@ -77,12 +77,23 @@ def parser() -> argparse.ArgumentParser:
     release.add_argument('--id',required=True)
     release.add_argument('--source',type=Path)
     release.add_argument('--expected-current',default='')
+    assessment = commands.add_parser('import-zap', help='Summarise an actual scoped ZAP JSON report')
+    assessment.add_argument('--report',required=True,type=Path)
+    assessment.add_argument('--target',required=True)
+    assessment.add_argument('--out',required=True,type=Path)
+    assessment.add_argument('--markdown',type=Path)
     return cli
 
 
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
+        if args.command == 'import-zap':
+            from .assessments import import_zap,assessment_markdown
+            from .core import write_private
+            report=import_zap(args.report,args.target);write_json(args.out,report)
+            if args.markdown:write_private(args.markdown,assessment_markdown(report))
+            print(f"Imported {len(report['findings'])} automated scan findings.");return 0
         if args.command in {'backup','restore','release'}:
             from .recovery import backup_sqlite,restore_sqlite,register_static_release,activate_static_release
             if args.command == 'backup': result=backup_sqlite(args.database,args.out)
@@ -137,7 +148,7 @@ def main(argv=None) -> int:
                 raise CharismaError('Set CHARISMA_ADMIN_TOKEN to a random secret of at least 24 characters. Keep it out of website code.')
             server = make_server(args.host, args.port, args.database, args.origin, args.site_key, token, args.runner_state)
             print(f'Charisma dashboard: http://{args.host}:{server.server_port}', flush=True)
-            print('Pilot server. Use a TLS reverse proxy with access and request limits for a hosted installation.', flush=True)
+            print('Development server. Use the Gunicorn and TLS deployment bundle for hosting.', flush=True)
             try:
                 server.serve_forever()
             finally:

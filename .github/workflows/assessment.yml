@@ -1,0 +1,73 @@
+name: Isolated dynamic assessment
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Scan the disposable fixture only
+        type: choice
+        default: passive
+        options: [passive, active]
+  push:
+    paths:
+      - 'charisma/**'
+      - 'deploy/**'
+      - '.github/workflows/assessment.yml'
+permissions:
+  contents: read
+concurrency:
+  group: assessment-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  assessment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the disposable target
+        run: |
+          docker build -f deploy/Dockerfile -t charisma-assessment .
+          docker pull ghcr.io/zaproxy/zaproxy:stable
+          docker network create --internal charisma-assessment
+          mkdir -p /tmp/charisma-assessment-data assessment-evidence
+          sudo chown 10001:10001 /tmp/charisma-assessment-data
+          sudo chown 1000:1000 assessment-evidence
+          docker run -d --name monitor --network charisma-assessment --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp -v /tmp/charisma-assessment-data:/data -v "$PWD/tests/integration/server.toml:/etc/charisma/server.toml:ro" -e CHARISMA_ADMIN_TOKEN=assessment-admin-token-32-characters -e CHARISMA_GATEWAY_TOKEN=assessment-gateway-token-32-characters -e CHARISMA_AUDIT_KEY=assessment-independent-audit-key-32-characters charisma-assessment
+      - name: Assess only the isolated fixture
+        env:
+          SCAN_MODE: ${{ inputs.mode || 'passive' }}
+        run: |
+          if [ "$SCAN_MODE" = active ]; then
+            scan_script=zap-full-scan.py
+          else
+            scan_script=zap-baseline.py
+          fi
+          set +e
+          timeout 480 docker run --rm --name charisma-zap --network charisma-assessment --memory=3g --cpus=2 -v "$PWD/assessment-evidence:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable "$scan_script" -t http://monitor:8787 -m 1 -T 5 -I -J zap.json -r zap.html -z '-config autoupdate.checkOnStart=false -config autoupdate.downloadNewRelease=false -config scanner.maxScanDurationInMins=2'
+          result=$?
+          set -e
+          if [ "$result" -ne 0 ] && [ "$result" -ne 1 ] && [ "$result" -ne 2 ]; then exit "$result"; fi
+      - name: Generate scope-specific report and reject high-risk alerts
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" assessment-evidence
+          python - <<'PY'
+          from pathlib import Path
+          from charisma.assessments import import_zap,assessment_markdown
+          from charisma.core import write_json,write_private
+          report=import_zap(Path('assessment-evidence/zap.json'),'http://monitor:8787')
+          write_json(Path('assessment-evidence/assessment.json'),report)
+          write_private(Path('assessment-evidence/assessment.md'),assessment_markdown(report))
+          if any(f['severity']=='high' for f in report['findings']):
+              raise SystemExit('High-risk scanner observations require review.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dynamic-assessment-evidence
+          path: assessment-evidence/
+          retention-days: 14
+      - name: Stop isolated scanner
+        if: always()
+        run: docker rm -f charisma-zap monitor || true

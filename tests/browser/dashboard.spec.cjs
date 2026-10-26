@@ -84,7 +84,7 @@ test('service isolation requires review and applies only the selected service',a
   await page.route('**/api/security',route=>route.fulfill({json:{enabled:true,services:[{id:'website',auto_block:false},{id:'accounts',auto_block:false}],blocks:[],isolated:action?.action==='isolate'?[{service:'website',expires:1793043600}]:[],audit:[]}}));
   await page.route('**/api/security/control',route=>{action=route.request().postDataJSON();return route.fulfill({json:{action:action.action,service:action.service}});});
   await connect(page);
-  await page.getByText('Manage a temporary control',{exact:true}).click();
+  await page.locator('summary').filter({hasText:'Manage a temporary control'}).click();
   await page.getByLabel('Action',{exact:true}).selectOption('isolate');
   await page.getByLabel('Reason',{exact:true}).fill('Investigating fixture behaviour');
   await page.getByRole('button',{name:'Review control',exact:true}).click();

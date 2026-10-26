@@ -17,7 +17,7 @@ Homepage = "https://github.com/zaid3/charisma"
 Issues = "https://github.com/zaid3/charisma/issues"
 
 [project.optional-dependencies]
-server = ["gunicorn==26.2.2"]
+server = ["gunicorn==26.2.0"]
 
 [project.scripts]
 charisma = "charisma.cli:main"
