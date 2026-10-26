@@ -13,3 +13,14 @@ dist/
 node_modules/
 playwright-report/
 test-results/
+# Private deployment state and native build products
+deploy/secrets/
+deploy/state/
+deploy/caddy-data/
+deploy/caddy-config/
+deploy/server.toml
+deploy/.env
+**/.build/
+**/DerivedData/
+*.jar
+*.dex

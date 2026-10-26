@@ -1,0 +1,67 @@
+name: charisma
+services:
+  monitor:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: charisma-monitor:0.2.0-rc.1
+    restart: unless-stopped
+    init: true
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 2
+    tmpfs: [/tmp:size=64m,mode=1777]
+    environment:
+      CHARISMA_SERVER_CONFIG: /etc/charisma/server.toml
+      CHARISMA_ADMIN_TOKEN_FILE: /run/secrets/admin_token
+      CHARISMA_READ_TOKEN_FILE: /run/secrets/read_token
+      CHARISMA_GATEWAY_TOKEN_FILE: /run/secrets/gateway_token
+      CHARISMA_AUDIT_KEY_FILE: /run/secrets/audit_key
+    secrets: [admin_token, read_token, gateway_token, audit_key]
+    volumes:
+      - ./server.toml:/etc/charisma/server.toml:ro
+      - ./state:/data
+    networks: [backplane]
+  proxy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
+    tmpfs: [/tmp:size=32m,mode=1777]
+    ports: ["80:8080", "443:8443", "443:8443/udp"]
+    environment:
+      MONITOR_DOMAIN: ${MONITOR_DOMAIN:?Set the monitor DNS name}
+      APP_DOMAIN: ${APP_DOMAIN:?Set an authorised application DNS name}
+      APP_UPSTREAM: ${APP_UPSTREAM:?Set the authorised application upstream}
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ['export CHARISMA_GATEWAY_TOKEN="$$(cat /run/secrets/gateway_token)"; exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile']
+    secrets: [gateway_token]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data:/data
+      - ./caddy-config:/config
+    depends_on:
+      monitor:
+        condition: service_healthy
+    networks: [backplane, public]
+networks:
+  backplane:
+    internal: true
+  public: {}
+secrets:
+  admin_token:
+    file: ./secrets/admin_token
+  read_token:
+    file: ./secrets/read_token
+  gateway_token:
+    file: ./secrets/gateway_token
+  audit_key:
+    file: ./secrets/audit_key

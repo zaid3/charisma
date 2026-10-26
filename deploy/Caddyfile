@@ -1,0 +1,33 @@
+{
+    admin off
+    http_port 8080
+    https_port 8443
+    servers {
+        timeouts {
+            read_header 10s
+            read_body 30s
+            idle 2m
+        }
+    }
+}
+{$MONITOR_DOMAIN} {
+    request_body {
+        max_size 4KB
+    }
+    header Strict-Transport-Security "max-age=31536000"
+    reverse_proxy monitor:8787 {
+        header_up X-Forwarded-For {remote_host}
+    }
+}
+{$APP_DOMAIN} {
+    request_body {
+        max_size 5MB
+    }
+    forward_auth monitor:8787 {
+        uri /edge/check
+        header_up Authorization "Bearer {$CHARISMA_GATEWAY_TOKEN}"
+        header_up X-Charisma-Service website
+        header_up X-Charisma-Source-IP {remote_host}
+    }
+    reverse_proxy {$APP_UPSTREAM}
+}

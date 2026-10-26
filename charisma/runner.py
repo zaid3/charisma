@@ -41,6 +41,9 @@ def read_config(path: Path) -> dict:
             raise CharismaError('Keep runner state outside monitored source checkouts.')
         if project.get('mode','scan') not in {'scan','repair'} or project.get('platform','auto') not in {'auto','web','ios','android'}:
             raise CharismaError('Invalid project mode or platform.')
+        if config.get('production',False) and project.get('mode') == 'repair' and not project.get('test_image'):
+            if project.get('platform') != 'ios' or project.get('isolated_native_worker') is not True:
+                raise CharismaError('Production repair workers require a pinned test_image or an explicitly isolated iOS worker.')
         tests=project.get('tests',[])
         if not isinstance(tests,list) or any(not isinstance(t,str) or not t.strip() for t in tests) or (project.get('mode') == 'repair' and not tests):
             raise CharismaError('Repair mode requires explicit trusted test commands.')
@@ -137,7 +140,7 @@ def run_cycle(config: dict, allow_model=False, trust_tests=False, allow_publish=
                 worktree=folder/'candidate'; apply_plan(root,plan,worktree)
                 stage('verifier','testing')
                 assert_not_paused(state,name)
-                receipt=verify(worktree,project['tests'],True)
+                receipt=verify(worktree,project['tests'],True,project.get('test_image'))
                 if not receipt['verified']:
                     stage('verifier','verification_failed')
                     results.append({'project':name,'status':'verification_failed','run_id':run_id,'worktree':str(worktree)}); continue

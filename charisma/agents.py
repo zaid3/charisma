@@ -63,6 +63,8 @@ def audit(plan: dict, originals: dict[str,str], platform: str) -> dict:
 def require_audit(plan: dict) -> None:
     if plan.get('strategy') == 'document-language':
         return
+    if plan.get('strategy') != 'model-proposal':
+        raise CharismaError('Unsupported repair strategy.')
     review=plan.get('audit',{})
     if not isinstance(review,dict) or review.get('verdict') != 'approve' or review.get('concerns') != [] or review.get('plan_sha256') != plan_digest(plan):
         raise CharismaError('This model proposal has no matching independent approval. Prepare and audit it again.')

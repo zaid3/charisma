@@ -40,6 +40,7 @@ def parser() -> argparse.ArgumentParser:
     test = commands.add_parser('verify', help='Run trusted project tests and rescan the repair targets')
     test.add_argument('worktree', type=Path)
     test.add_argument('--test', action='append', required=True, help='Trusted command; repeat for multiple checks')
+    test.add_argument('--container-image', help='Pre-pulled test image pinned by sha256 digest; runs without network or host secrets')
     test.add_argument('--trust-tests', action='store_true')
     pr = commands.add_parser('publish', help='Commit, push and open a draft PR using your existing GitHub CLI login')
     pr.add_argument('worktree', type=Path)
@@ -62,12 +63,35 @@ def parser() -> argparse.ArgumentParser:
     incident.add_argument('--log', required=True, type=Path)
     incident.add_argument('--out', required=True, type=Path)
     incident.add_argument('--markdown', type=Path)
+    backup = commands.add_parser('backup', help='Create and verify a consistent SQLite backup')
+    backup.add_argument('--database',required=True,type=Path)
+    backup.add_argument('--out',required=True,type=Path)
+    restore = commands.add_parser('restore', help='Restore a verified SQLite backup while the application is stopped')
+    restore.add_argument('--backup',required=True,type=Path)
+    restore.add_argument('--database',required=True,type=Path)
+    restore.add_argument('--expected-current-sha256',required=True)
+    restore.add_argument('--offline',action='store_true')
+    release = commands.add_parser('release', help='Register or switch an immutable static-web release')
+    release.add_argument('operation',choices=['register','activate'])
+    release.add_argument('--root',required=True,type=Path)
+    release.add_argument('--id',required=True)
+    release.add_argument('--source',type=Path)
+    release.add_argument('--expected-current',default='')
     return cli
 
 
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
     try:
+        if args.command in {'backup','restore','release'}:
+            from .recovery import backup_sqlite,restore_sqlite,register_static_release,activate_static_release
+            if args.command == 'backup': result=backup_sqlite(args.database,args.out)
+            elif args.command == 'restore': result=restore_sqlite(args.backup,args.database,args.expected_current_sha256,args.offline)
+            elif args.operation == 'register':
+                if not args.source: raise CharismaError('Release registration requires --source.')
+                result=register_static_release(args.source,args.root,args.id)
+            else: result=activate_static_release(args.root,args.id,args.expected_current)
+            print(json.dumps(result,indent=2)); return 0
         if args.command == 'triage':
             from .incidents import triage, incident_markdown
             from .core import write_private
@@ -98,7 +122,7 @@ def main(argv=None) -> int:
         elif args.command == 'apply':
             print(json.dumps(apply_plan(args.project, load_json(args.plan), args.worktree), indent=2))
         elif args.command == 'verify':
-            result = verify(args.worktree, args.test, args.trust_tests)
+            result = verify(args.worktree, args.test, args.trust_tests, args.container_image)
             print('Configured checks and target rescan passed.' if result['verified'] else 'Verification failed. Inspect the candidate and test output.')
             for check in result['checks']:
                 print(('PASS' if check['passed'] else 'FAIL') + ' ' + ' '.join(check['command']))

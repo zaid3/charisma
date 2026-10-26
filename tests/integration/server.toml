@@ -1,0 +1,14 @@
+public_origin = "https://monitor.fixture.test"
+origins = ["https://app.fixture.test", "http://127.0.0.1:8787"]
+site_key = "public-integration-key"
+database = "/data/events.sqlite3"
+security_database = "/data/security.sqlite3"
+native_apps = ["io.fixture.ios", "io.fixture.android"]
+[services.website]
+auto_block = true
+threshold = 5
+window_seconds = 60
+block_seconds = 60
+protected_networks = ["127.0.0.0/8", "::1/128"]
+[services.accounts]
+auto_block = false

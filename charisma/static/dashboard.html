@@ -11,11 +11,12 @@
 <a class="skip" href="#main">Skip to reports</a>
 <div class="shell">
   <aside class="sidebar">
-    <a class="brand" href="/" aria-label="Charisma home"><span class="brand-mark" aria-hidden="true">c</span>charisma<span class="version">0.1</span></a>
+    <a class="brand" href="/" aria-label="Charisma home"><span class="brand-mark" aria-hidden="true">c</span>charisma<span class="version">0.2 RC</span></a>
     <p class="side-label">WORKSPACE</p>
     <nav aria-label="Main navigation">
       <a class="nav-link selected" href="#main"><span aria-hidden="true">◫</span> Overview</a>
       <a class="nav-link" href="#reports"><span aria-hidden="true">≡</span> Issue reports</a>
+      <a class="nav-link" href="#protection"><span aria-hidden="true">◇</span> Protection</a>
       <a class="nav-link" href="#history"><span aria-hidden="true">↺</span> Agent history</a>
       <a class="nav-link" href="#installation"><span aria-hidden="true">+</span> Connect a website</a>
     </nav>
@@ -24,7 +25,7 @@
   </aside>
   <main id="main">
     <header class="topbar"><span>WEBSITE MONITOR</span><span class="connection" id="connection">Disconnected</span></header>
-    <section class="heading"><div><p class="eyebrow">OBSERVE. UNDERSTAND. IMPROVE.</p><h1>Your website,<br><span>with a little more clarity.</span></h1><p class="intro">Browser errors and usability signals, in one place.<br class="desktop-break"> Start with a report. Follow through with a tested fix.</p></div><span class="edition">PILOT RELEASE</span></section>
+    <section class="heading"><div><p class="eyebrow">OBSERVE. UNDERSTAND. IMPROVE.</p><h1>Your website,<br><span>with a little more clarity.</span></h1><p class="intro">Browser errors and usability signals, in one place.<br class="desktop-break"> Start with a report. Follow through with a tested fix.</p></div><span class="edition">RELEASE CANDIDATE</span></section>
     <section class="connect-panel" id="connect-panel" aria-labelledby="connect-title">
       <div><h2 id="connect-title">Connect to your reports</h2><p>Enter the dashboard access token from your server setup. It stays in this tab until you disconnect or reload.</p></div>
       <form id="connect-form"><label for="token">Dashboard access token</label><div class="input-row"><input id="token" type="password" required autocomplete="current-password" placeholder="Paste your access token" aria-describedby="status"><button type="submit" id="connect">Connect</button></div></form>
@@ -42,6 +43,23 @@
       <div class="empty" id="empty"><span class="empty-mark" aria-hidden="true">◫</span><h3 id="empty-title">A place for the details.</h3><p id="empty-description">Connect to view reports from your installed website monitor.</p></div>
       <p class="report-footnote">Shows up to 200 recent report groups. Reviewed means acknowledged, not fixed. A new occurrence reopens a report.</p>
     </section>
+    <section id="protection" class="reports" aria-labelledby="protection-title">
+      <div class="section-title"><div><p class="eyebrow">SCOPED CONTROLS</p><h2 id="protection-title">Service protection</h2></div><span id="protection-status">Connect to view</span></div>
+      <p class="report-footnote" id="protection-note">Connect to inspect the gateway policy and its recorded actions.</p>
+      <div id="protection-content" hidden>
+        <div id="service-list" class="event-list"></div>
+        <details class="installation"><summary>Manage a temporary control <span aria-hidden="true">+</span></summary><div>
+          <form id="protection-form">
+            <div class="filters"><div><label for="control-service">Service</label><select id="control-service" required></select></div><div><label for="control-action">Action</label><select id="control-action"><option value="block">Block one IP</option><option value="unblock">Remove IP block</option><option value="isolate">Isolate service</option><option value="resume">Resume service</option></select></div><div><label for="control-seconds">Duration</label><select id="control-seconds"><option value="300">5 minutes</option><option value="600" selected>10 minutes</option><option value="1800">30 minutes</option><option value="3600">60 minutes</option></select></div></div>
+            <label for="control-ip">Source IP, for IP controls only</label><input id="control-ip" autocomplete="off" placeholder="An address from your own server evidence">
+            <label for="control-reason">Reason</label><input id="control-reason" required minlength="3" maxlength="200" placeholder="Brief investigation reference, without customer details">
+            <button id="control-prepare" type="submit">Review control</button>
+          </form>
+        </div></details>
+        <details class="installation"><summary>Recent protection activity <span aria-hidden="true">+</span></summary><div id="security-audit"></div></details>
+      </div>
+    </section>
+    <dialog id="protection-dialog" aria-labelledby="protection-confirm-title"><h2 id="protection-confirm-title">Confirm this control</h2><p id="protection-confirm-detail"></p><p>Traffic through this configured gateway is affected. No action is sent to the source device.</p><div class="actions"><button id="protection-cancel" class="secondary">Cancel</button><button id="protection-confirm">Apply control</button></div></dialog>
     <section id="history" class="reports" aria-labelledby="history-title">
       <div class="section-title"><div><p class="eyebrow">ACCOUNTABLE BY DESIGN</p><h2 id="history-title">Agent history</h2></div><span>Recorded activity</span></div>
       <p id="history-status" class="report-footnote">Connect to view the worker history.</p>

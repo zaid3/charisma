@@ -1,0 +1,18 @@
+# Copy to server.toml and use your real domains before starting.
+public_origin = "https://monitor.example.com"
+origins = ["https://app.example.com"]
+site_key = "choose-a-public-installation-id"
+database = "/data/events.sqlite3"
+security_database = "/data/security.sqlite3"
+native_apps = ["com.yourcompany.yourapp"]
+# The bundled proxy connects through Docker's internal network. Without explicit
+# trusted_proxies, per-IP ingestion limiting sees the proxy address and is shared.
+# Set this to the proxy's actual fixed IP/CIDR only after inspecting your network.
+trusted_proxies = []
+
+[services.website]
+auto_block = false
+threshold = 20
+window_seconds = 60
+block_seconds = 600
+protected_networks = ["127.0.0.0/8", "::1/128"]

@@ -96,9 +96,11 @@ class LanguageTag(HTMLParser):
     def __init__(self):
         super().__init__()
         self.start = None
+        self.language = None
     def handle_starttag(self, tag, attrs):
         if tag == 'html' and self.start is None:
             self.start = (self.getpos(), self.get_starttag_text())
+            self.language = dict(attrs).get('lang')
 
 
 def language_plan(root: Path, report: dict, language: str) -> dict:
@@ -179,6 +181,15 @@ def validate_plan(root: Path, plan: dict) -> None:
     valid = {(f['rule'], f['path']) for f in baseline['findings'] if f['rule'] != 'credential-pattern'}
     if baseline['errors'] or any((t['rule'], t['path']) not in valid for t in targets) or {t['path'] for t in targets} != seen:
         raise CharismaError('Repair targets must match actual supported findings in every changed file.')
+    if plan.get('strategy') == 'document-language':
+        for change in changes:
+            parser = LanguageTag(); parser.feed(change['content'])
+            if not isinstance(parser.language, str):
+                raise CharismaError('Offline repairs may only set the document language.')
+            expected = language_plan(root, baseline, parser.language)
+            match = next((item for item in expected['changes'] if item['path'] == change['path']), None)
+            if match is None or match['content'] != change['content']:
+                raise CharismaError('The offline plan contains changes beyond its document-language rule.')
 
 
 def receipt_path(worktree: Path) -> Path:
@@ -224,13 +235,23 @@ def unchanged_candidate(worktree: Path, receipt: dict) -> None:
             raise CharismaError('A proposed file changed after preparation.')
 
 
-def run_check(worktree: Path, argv: list[str], timeout: int = 300) -> dict:
+def run_check(worktree: Path, argv: list[str], timeout: int = 300, container_image: str | None = None) -> dict:
     if not argv or any(not isinstance(s, str) or '\x00' in s for s in argv):
         raise CharismaError('Supply a valid test command.')
     env = {k: v for k, v in os.environ.items() if k in {'PATH', 'LANG', 'LC_ALL', 'SYSTEMROOT', 'TMPDIR', 'TEMP', 'TMP'}}
     env['CI'] = 'true'
+    command = list(argv)
+    if container_image:
+        if not re.fullmatch(r'[A-Za-z0-9./:_-]+@sha256:[0-9a-f]{64}',container_image):
+            raise CharismaError('Use a pre-pulled test image pinned by its sha256 digest.')
+        if not shutil.which('docker'):
+            raise CharismaError('Docker is required for the configured isolated tests.')
+        command = ['docker','run','--rm','--pull=never','--network=none','--read-only','--cap-drop=ALL',
+                   '--security-opt=no-new-privileges','--pids-limit=128','--memory=2g','--cpus=2',
+                   '--user',f'{os.getuid()}:{os.getgid()}','--tmpfs','/tmp:rw,nosuid,size=256m',
+                   '--mount',f'type=bind,src={worktree.resolve()},dst=/work','--workdir','/work',container_image,*argv]
     started = time.monotonic()
-    process = subprocess.Popen(argv, cwd=worktree, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    process = subprocess.Popen(command, cwd=worktree, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                start_new_session=os.name != 'nt')
     tail = bytearray()
     def drain():
@@ -267,7 +288,7 @@ def run_check(worktree: Path, argv: list[str], timeout: int = 300) -> dict:
             'returncode': process.returncode, 'timed_out': timed_out, 'seconds': round(time.monotonic() - started, 2), 'output_tail': log}
 
 
-def verify(worktree: Path, commands: list[str], trust_tests: bool) -> dict:
+def verify(worktree: Path, commands: list[str], trust_tests: bool, container_image: str | None = None) -> dict:
     if not trust_tests or not commands:
         raise CharismaError('Choose project test commands and pass --trust-tests. Run only trusted code in a disposable environment.')
     receipt = load_json(receipt_path(worktree))
@@ -276,7 +297,7 @@ def verify(worktree: Path, commands: list[str], trust_tests: bool) -> dict:
     write_json(receipt_path(worktree), receipt)
     unchanged_candidate(worktree, receipt)
     for command in commands:
-        outcome = run_check(worktree, shlex.split(command))
+        outcome = run_check(worktree, shlex.split(command), container_image=container_image)
         receipt['checks'].append(outcome)
         write_json(receipt_path(worktree), receipt)
         if not outcome['passed']:

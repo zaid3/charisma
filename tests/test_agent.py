@@ -155,6 +155,9 @@ class RepairTests(GitFixture, unittest.TestCase):
     def test_new_builtin_finding_blocks_verification(self):
         self.plan['changes'][0]['content'] += '<img src="new.png">'
         self.plan['changes'][0]['after_sha256'] = digest(self.plan['changes'][0]['content'])
+        self.plan['strategy'] = 'model-proposal'
+        from charisma.agents import plan_digest
+        self.plan['audit'] = {'verdict':'approve','concerns':[],'plan_sha256':plan_digest(self.plan)}
         self.apply()
         result = verify(self.work,[f'{sys.executable} check.py'],True)
         self.assertFalse(result['verified']); self.assertEqual(result['new_findings'][0]['rule'],'image-alt')

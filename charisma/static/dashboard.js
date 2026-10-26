@@ -1,6 +1,7 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
+  let canControl = false, pendingProtection = null;
   let token = '', events = [], connected = false, updated = 0, busy = false, generation = 0;
   function status(message, error = false) { $('status').textContent = message; $('status').classList.toggle('error', error); }
   function node(tag, text, className) { const item = document.createElement(tag); if (text !== undefined) item.textContent = String(text); if (className) item.className = className; return item; }
@@ -28,6 +29,7 @@
       meta.append(node('p', `${event.count.toLocaleString()} reported · ${date(event.last_seen)}`));
       if (!event.reviewed) {
         const button = node('button', 'Mark reviewed', 'secondary');
+        button.disabled = !canControl;
         button.setAttribute('aria-label', `Mark reviewed: ${event.title} on ${event.page}`);
         button.addEventListener('click', async () => {
           const current = generation;
@@ -47,6 +49,47 @@
     if (!response.ok) throw new Error(response.status === 401 ? 'The access token was not accepted. Disconnect and enter the correct token.' : 'Reports could not be loaded. Check the server and try again.');
     return response.json();
   }
+  function renderProtection(data) {
+    $('protection-status').textContent = data.enabled ? (canControl ? 'Operator access' : 'Read access') : 'Not configured';
+    $('protection-content').hidden = !data.enabled;
+    $('protection-note').textContent = data.enabled ? 'Controls apply only to traffic routed through this gateway. Isolation and blocks expire automatically.' : 'Configure the production gateway to enable temporary IP blocks and per-service isolation.';
+    $('service-list').replaceChildren(); $('security-audit').replaceChildren(); $('control-service').replaceChildren();
+    $('control-prepare').disabled = !canControl;
+    if (!data.enabled) return;
+    for (const service of data.services) {
+      const isolation = data.isolated.find(item => item.service === service.id);
+      const blocks = data.blocks.filter(item => item.service === service.id).length;
+      const card = node('article', undefined, 'event'); const text = node('div');
+      text.append(node('h3', service.id), node('p', isolation ? `Isolated until ${date(isolation.expires)}` : 'Gateway access enabled'), node('p', `${blocks} active IP blocks · automatic blocking ${service.auto_block ? 'enabled' : 'disabled'}`));
+      card.append(text); $('service-list').append(card);
+      const option = node('option', service.id); option.value = service.id; $('control-service').append(option);
+    }
+    const list = node('ol', undefined, 'timeline');
+    for (const item of data.audit) {
+      const entry = node('li'); entry.append(node('strong', `${item.event.action.replaceAll('_', ' ')} · ${item.event.service}`), node('time', date(item.at)), node('p', item.event.reason || 'Configured threshold reached.'));
+      list.append(entry);
+    }
+    $('security-audit').append(data.audit.length ? list : node('p', 'No protection actions recorded.'));
+  }
+  $('protection-form').addEventListener('submit', event => {
+    event.preventDefault(); if (!canControl) return;
+    pendingProtection = { action:$('control-action').value, service:$('control-service').value, source_ip:$('control-ip').value.trim(), seconds:Number($('control-seconds').value), reason:$('control-reason').value.trim() };
+    const affectsIP = ['block','unblock'].includes(pendingProtection.action);
+    if (affectsIP && !pendingProtection.source_ip) { status('Enter the source IP for this control.',true); $('control-ip').focus(); return; }
+    $('protection-confirm-detail').textContent = `${pendingProtection.action.replaceAll('_',' ')} on ${pendingProtection.service}${affectsIP ? ' for '+pendingProtection.source_ip : ''}. Temporary restrictions last ${pendingProtection.seconds/60} minutes. Reason: ${pendingProtection.reason}`;
+    $('protection-dialog').showModal(); $('protection-cancel').focus();
+  });
+  $('protection-cancel').addEventListener('click', () => { pendingProtection=null; $('protection-dialog').close(); });
+  $('protection-confirm').addEventListener('click', async () => {
+    const value=pendingProtection; pendingProtection=null; $('protection-dialog').close(); if (!value || !canControl) return;
+    const current=generation; $('control-prepare').disabled=true;
+    try {
+      const response=await fetch('/api/security/control',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},credentials:'omit',body:JSON.stringify(value),signal:AbortSignal.timeout(10000)});
+      const result=await response.json(); if (!response.ok) throw new Error(result.error || 'Control was not applied.');
+      if (current===generation) await refresh();
+    } catch(error) { if (current===generation) status(error.message,true); }
+    finally { if (current===generation) $('control-prepare').disabled=!canControl; }
+  });
   let pendingUndo = null;
   function renderRuns(result) {
     $('history-status').textContent = result.message;
@@ -65,9 +108,11 @@
       const actions = node('div', undefined, 'actions');
       const pause = node('button', run.paused ? 'Resume repairs' : 'Pause repairs', 'secondary');
       pause.addEventListener('click', () => control(run.id, run.paused ? 'resume' : 'pause', pause));
+      pause.disabled = !canControl;
       actions.append(pause);
       if (run.can_undo) {
         const undo = node('button', 'Undo candidate', 'secondary');
+        undo.disabled = !canControl;
         undo.addEventListener('click', () => { pendingUndo = run.id; $('undo-dialog').showModal(); $('undo-cancel').focus(); });
         actions.append(undo);
       }
@@ -96,11 +141,13 @@
     try {
       const result = await api('/api/events');
       if (current !== generation) return;
+      canControl = result.can_control === true;
       events = result.events; updated = result.updated_at; connected = true;
       $('connect-panel').hidden = true; $('disconnect').hidden = false;
       $('connection').textContent = 'Connected'; $('connection').className = 'connection connected';
       status(`Updated ${date(updated)}. Counts describe the ${events.length} loaded report groups.`);
       render();
+      try { const protection = await api('/api/security'); if (current === generation) renderProtection(protection); } catch { if (current === generation) $('protection-status').textContent = 'Unable to load'; }
       try { const history = await api('/api/runs'); if (current === generation) renderRuns(history); }
       catch { if (current === generation) $('history-status').textContent = 'Worker history could not be loaded. Refresh to retry.'; }
     } catch (error) {
@@ -118,6 +165,7 @@
   $('refresh').addEventListener('click', refresh);
   $('disconnect').addEventListener('click', () => {
     $('run-list').replaceChildren(); $('history-status').textContent = 'Connect to view the worker history.'; pendingUndo = null; if ($('undo-dialog').open) $('undo-dialog').close();
+    canControl=false; pendingProtection=null; $('protection-content').hidden=true; $('protection-status').textContent='Connect to view'; if ($('protection-dialog').open) $('protection-dialog').close();
     generation++; token = ''; events = []; connected = false; busy = false; updated = 0;
     $('connection').textContent = 'Disconnected'; $('connection').className = 'connection';
     $('connect-panel').hidden = false; $('disconnect').hidden = true; $('refresh').disabled = true; $('connect').disabled = false;

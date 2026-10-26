@@ -71,3 +71,29 @@ test('history expands its timeline and confirms candidate undo',async({page})=>{
   await page.getByRole('dialog').getByRole('button',{name:'Undo candidate',exact:true}).click();
   await expect(page.locator('#run-list')).toContainText('candidate undone');
 });
+test('read access cannot edit reports or worker history',async({page})=>{
+  await page.route('**/api/events',async route=>{
+    const response=await route.fetch();const data=await response.json();data.can_control=false;
+    await route.fulfill({json:data});
+  });
+  await connect(page);
+  for(const button of await page.locator('.event button').all())await expect(button).toBeDisabled();
+});
+test('service isolation requires review and applies only the selected service',async({page})=>{
+  let action=null;
+  await page.route('**/api/security',route=>route.fulfill({json:{enabled:true,services:[{id:'website',auto_block:false},{id:'accounts',auto_block:false}],blocks:[],isolated:action?.action==='isolate'?[{service:'website',expires:1793043600}]:[],audit:[]}}));
+  await page.route('**/api/security/control',route=>{action=route.request().postDataJSON();return route.fulfill({json:{action:action.action,service:action.service}});});
+  await connect(page);
+  await page.getByText('Manage a temporary control',{exact:true}).click();
+  await page.getByLabel('Action',{exact:true}).selectOption('isolate');
+  await page.getByLabel('Reason',{exact:true}).fill('Investigating fixture behaviour');
+  await page.getByRole('button',{name:'Review control',exact:true}).click();
+  await expect(page.locator('#protection-dialog')).toBeVisible();
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
+  expect(action).toBeNull();
+  await page.getByRole('button',{name:'Review control',exact:true}).click();
+  await page.getByRole('button',{name:'Apply control',exact:true}).click();
+  await expect(page.locator('#service-list')).toContainText('Isolated until');
+  expect(action.service).toBe('website');expect(action.seconds).toBe(600);
+  await expect(page.locator('#service-list .event').filter({hasText:'accounts'})).toContainText('Gateway access enabled');
+});

@@ -17,6 +17,8 @@ from .core import CharismaError
 from .history import recent_runs, pause_project, undo_candidate
 
 CODES = {
+    'ios-error': ('runtime', 'Reported iOS application error'),
+    'android-error': ('runtime', 'Reported Android application error'),
     'script-error': ('runtime', 'Browser script error'),
     'promise-rejection': ('runtime', 'Unhandled promise rejection'),
     'missing-alt': ('ux', 'Images without alt attributes'),
@@ -115,98 +117,11 @@ class RateLimit:
             return count < 60
 
 
-def make_server(host: str, port: int, database: Path, origins: list[str], site_key: str, admin_token: str, runner_state: Path | None = None) -> ThreadingHTTPServer:
-    runner_state = runner_state.resolve() if runner_state else None
-    allowed = {valid_origin(origin) for origin in origins}
-    if not allowed or not re.fullmatch(r'[A-Za-z0-9_-]{8,80}', site_key) or len(admin_token) < 24 or hmac.compare_digest(site_key.encode(), admin_token.encode()):
-        raise CharismaError('Configure an allowed origin, a public site key and a separate admin token of at least 24 characters.')
-    if database.is_symlink():
-        raise CharismaError('The event database must not be a symbolic link.')
-    store, limit = EventStore(database), RateLimit()
-    static = Path(__file__).parent / 'static'
-
-    class Handler(BaseHTTPRequestHandler):
-        server_version = 'Charisma'
-        sys_version = ''
+def make_server(host: str, port: int, database: Path, origins: list[str], site_key: str, admin_token: str, runner_state: Path | None = None):
+    # Development entry point; production uses Gunicorn with the same WSGI application.
+    from wsgiref.simple_server import make_server as wsgi_server, WSGIRequestHandler
+    from .web import Application, Settings
+    class QuietHandler(WSGIRequestHandler):
         def log_message(self, *args):
             pass
-        def setup(self):
-            super().setup()
-            self.connection.settimeout(10)
-        def reply(self, status, data, content_type='application/json; charset=utf-8', cors=False):
-            content = data if isinstance(data, bytes) else json.dumps(data).encode()
-            self.send_response(status)
-            self.send_header('Content-Type', content_type)
-            self.send_header('Content-Length', str(len(content)))
-            self.send_header('Cache-Control', 'no-store')
-            self.send_header('X-Content-Type-Options', 'nosniff')
-            self.send_header('Referrer-Policy', 'no-referrer')
-            self.send_header('X-Frame-Options', 'DENY')
-            self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
-            if cors and self.headers.get('Origin') in allowed:
-                self.send_header('Access-Control-Allow-Origin', self.headers['Origin'])
-                self.send_header('Vary', 'Origin')
-                self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Charisma-Site-Key')
-                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-            self.end_headers()
-            self.wfile.write(content)
-        def admin(self):
-            supplied = self.headers.get('Authorization', '')
-            return hmac.compare_digest(supplied.encode(), ('Bearer ' + admin_token).encode())
-        def do_OPTIONS(self):
-            if self.path != '/ingest' or self.headers.get('Origin') not in allowed:
-                return self.reply(403, {'error': 'Origin is not enabled.'})
-            self.reply(200, {}, cors=True)
-        def do_GET(self):
-            if self.path == '/health':
-                return self.reply(200, {'status': 'ok'})
-            if self.path == '/api/runs':
-                if not self.admin():
-                    return self.reply(401, {'error':'Dashboard authentication required.'})
-                return self.reply(200, recent_runs(runner_state))
-            if self.path == '/api/events':
-                if not self.admin():
-                    return self.reply(401, {'error': 'Enter the dashboard access token.'})
-                return self.reply(200, {'events': store.list(), 'updated_at': int(time.time()), 'limit': 200})
-            if self.path in ASSETS:
-                name, kind = ASSETS[self.path]
-                return self.reply(200, (static / name).read_bytes(), kind)
-            self.reply(404, {'error': 'Not found.'})
-        def do_POST(self):
-            operation = re.fullmatch(r'/api/runs/([0-9a-f]{16})/(pause|resume|undo)', self.path)
-            if operation:
-                if not self.admin():
-                    return self.reply(401, {'error':'Dashboard authentication required.'})
-                if runner_state is None:
-                    return self.reply(409, {'error':'Worker history is not connected.'})
-                run_id, action = operation.groups()
-                try:
-                    result = undo_candidate(runner_state,run_id) if action == 'undo' else pause_project(runner_state,run_id,action == 'pause')
-                    return self.reply(200,result)
-                except (CharismaError,OSError,ValueError) as exc:
-                    return self.reply(409, {'error':str(exc) if isinstance(exc,CharismaError) else 'The local control action could not be completed.'})
-            match = re.fullmatch(r'/api/events/([0-9]+)/review', self.path)
-            if match:
-                if not self.admin():
-                    return self.reply(401, {'error': 'Dashboard authentication required.'})
-                ok = store.review(int(match.group(1)))
-                return self.reply(200 if ok else 404, {'reviewed': ok})
-            if self.path != '/ingest':
-                return self.reply(404, {'error': 'Not found.'})
-            if self.headers.get('Origin') not in allowed or not hmac.compare_digest(self.headers.get('X-Charisma-Site-Key', '').encode(), site_key.encode()):
-                return self.reply(403, {'error': 'This website is not enabled.'})
-            if not limit.allow(self.client_address[0]):
-                return self.reply(429, {'error': 'Report limit reached.'}, cors=True)
-            try:
-                length = int(self.headers.get('Content-Length', '0'))
-                if self.headers.get('Transfer-Encoding') or not 0 < length <= 4096 or self.headers.get_content_type() != 'application/json':
-                    return self.reply(400, {'error': 'Send a JSON event of at most 4096 bytes.'}, cors=True)
-                event = json.loads(self.rfile.read(length))
-                store.record(validate_event(event))
-            except (ValueError, TypeError, CharismaError):
-                return self.reply(400, {'error': 'Event rejected: unsupported fields or values.'}, cors=True)
-            self.reply(202, {'accepted': True}, cors=True)
-
-    server = ThreadingHTTPServer((host, port), Handler)
-    server.daemon_threads = True
-    return server
+    return wsgi_server(host,port,Application(Settings(database,origins,site_key,admin_token,runner_state=runner_state)),handler_class=QuietHandler)
