@@ -27,6 +27,10 @@ jobs:
   browser:
     name: Browser and monitor
     runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,7 +41,6 @@ jobs:
           node-version: '22'
       - run: node --test tests/monitor.test.cjs
       - run: npm ci --ignore-scripts
-      - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
       - uses: actions/upload-artifact@v4
         if: always()
