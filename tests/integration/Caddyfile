@@ -5,7 +5,7 @@
 :8080 {
     forward_auth monitor:8787 {
         uri /edge/check
-        header_up Authorization "Bearer integration-gateway-token-32-characters"
+        header_up Authorization "Bearer {$CHARISMA_GATEWAY_TOKEN}"
         header_up X-Charisma-Service website
         header_up X-Charisma-Source-IP {remote_host}
     }
@@ -14,7 +14,7 @@
 :8081 {
     forward_auth monitor:8787 {
         uri /edge/check
-        header_up Authorization "Bearer integration-gateway-token-32-characters"
+        header_up Authorization "Bearer {$CHARISMA_GATEWAY_TOKEN}"
         header_up X-Charisma-Service accounts
         header_up X-Charisma-Source-IP {remote_host}
     }

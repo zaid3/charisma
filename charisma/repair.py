@@ -249,7 +249,7 @@ def run_check(worktree: Path, argv: list[str], timeout: int = 300, container_ima
             raise CharismaError('Docker is required for the configured isolated tests.')
         container_name = 'charisma-test-' + uuid.uuid4().hex[:16]
         command = ['docker','run','--name',container_name,'--rm','--pull=never','--network=none','--read-only','--cap-drop=ALL',
-                   '--security-opt=no-new-privileges','--pids-limit=128','--memory=2g','--cpus=2',
+                   '--security-opt=no-new-privileges','--pids-limit=128','--memory=2g','--cpus=2','--env','CI=true',
                    '--user',f'{os.getuid()}:{os.getgid()}','--tmpfs','/tmp:rw,nosuid,size=256m',
                    '--mount',f'type=bind,src={worktree.resolve()},dst=/work','--workdir','/work',container_image,*argv]
     started = time.monotonic()

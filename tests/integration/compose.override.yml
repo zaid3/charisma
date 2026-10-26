@@ -1,0 +1,6 @@
+# Replace only TLS routing with disposable HTTP fixture routes.
+# All production users, secrets, mounts, healthchecks and limits stay active.
+services:
+  proxy:
+    volumes:
+      - ../tests/integration/Caddyfile:/etc/caddy/Caddyfile:ro

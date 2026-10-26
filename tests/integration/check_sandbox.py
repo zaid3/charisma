@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import tempfile
+import subprocess
 from charisma.repair import run_check
 
 with tempfile.TemporaryDirectory() as directory:
@@ -23,3 +24,9 @@ print('Isolated checks passed')
     result=run_check(candidate,['python','check.py'],container_image=os.environ['CHARISMA_TEST_IMAGE'])
     assert result['passed'],result['output_tail']
     print(result['output_tail'])
+
+    timeout_result=run_check(candidate,['python','-c','import time;time.sleep(60)'],timeout=1,container_image=os.environ['CHARISMA_TEST_IMAGE'])
+    assert timeout_result['timed_out'] and not timeout_result['passed']
+    remaining=subprocess.run(['docker','ps','--filter','name=charisma-test-','--format','{{.Names}}'],capture_output=True,text=True,check=True)
+    assert not remaining.stdout.strip(), 'Timed-out test container was left running'
+    print('Timed-out isolated test container was removed.')

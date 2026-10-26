@@ -13,53 +13,48 @@ jobs:
     name: Gateway and container integration
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      MONITOR_DOMAIN: monitor.fixture.test
+      APP_DOMAIN: app.fixture.test
+      APP_UPSTREAM: fixture:8080
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Build production image
-        run: docker build -f deploy/Dockerfile -t charisma-under-test .
-      - name: Start isolated fixture gateway
+      - name: Prepare the actual Compose stack with disposable configuration
         run: |
-          mkdir -p /tmp/charisma-container-state
-          sudo chown 10001:10001 /tmp/charisma-container-state
-          docker network create --internal charisma-fixture
-          docker run -d --name monitor --network charisma-fixture --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp -p 127.0.0.1:18787:8787 -v /tmp/charisma-container-state:/data -v "$PWD/tests/integration/server.toml:/etc/charisma/server.toml:ro" -e CHARISMA_ADMIN_TOKEN=integration-admin-token-32-characters -e CHARISMA_GATEWAY_TOKEN=integration-gateway-token-32-characters -e CHARISMA_AUDIT_KEY=integration-independent-audit-key-32-characters charisma-under-test
-          docker run -d --name proxy --network charisma-fixture -p 127.0.0.1:18080:8080 -p 127.0.0.1:18081:8081 -v "$PWD/tests/integration/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.7-alpine
-      - name: Wait for readiness and verify gateway controls
+          cp tests/integration/server.toml deploy/server.toml
+          python deploy/prepare.py
+          sudo chown -R 10001:10001 deploy/secrets deploy/state deploy/caddy-data deploy/caddy-config
+          docker compose -f deploy/compose.yml -f tests/integration/compose.override.yml config --quiet
+      - name: Build and start the production Compose services
+        run: docker compose -f deploy/compose.yml -f tests/integration/compose.override.yml up --build -d --wait --wait-timeout 90
+      - name: Verify gateway controls across the private network
         run: |
-          docker exec -i monitor python - <<'PY'
-          import time,urllib.request
-          for attempt in range(30):
-              try:
-                  urllib.request.urlopen('http://127.0.0.1:8787/ready',timeout=2)
-                  break
-              except Exception:
-                  if attempt==29: raise
-                  time.sleep(1)
-          PY
-          docker run --rm --network charisma-fixture --read-only --cap-drop ALL -e FIXTURE_MONITOR=http://monitor:8787 -e FIXTURE_WEBSITE=http://proxy:8080 -e FIXTURE_ACCOUNTS=http://proxy:8081 -v "$PWD/tests/integration/check_gateway.py:/tmp/check_gateway.py:ro" charisma-under-test python /tmp/check_gateway.py
+          docker compose -f deploy/compose.yml -f tests/integration/compose.override.yml run --rm --no-deps -e FIXTURE_ADMIN_FILE=/run/secrets/admin_token -e FIXTURE_GATEWAY_FILE=/run/secrets/gateway_token -e FIXTURE_MONITOR=http://monitor:8787 -e FIXTURE_WEBSITE=http://proxy:8080 -e FIXTURE_ACCOUNTS=http://proxy:8081 -v "$PWD/tests/integration/check_gateway.py:/tmp/check_gateway.py:ro" monitor python /tmp/check_gateway.py
       - name: Verify configured test isolation
         run: |
           docker pull python:3.12-slim
           export CHARISMA_TEST_IMAGE="$(docker image inspect python:3.12-slim --format '{{index .RepoDigests 0}}')"
-          python tests/integration/check_sandbox.py
+          PYTHONPATH="$PWD" python tests/integration/check_sandbox.py
       - name: Validate production proxy configuration
         run: docker run --rm -e MONITOR_DOMAIN=monitor.fixture.test -e APP_DOMAIN=app.fixture.test -e APP_UPSTREAM=application:8080 -e CHARISMA_GATEWAY_TOKEN=fixture-token -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.7-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
       - name: Capture diagnostics
         if: always()
         run: |
           mkdir -p production-evidence
-          docker logs monitor > production-evidence/monitor.log 2>&1 || true
-          docker logs proxy > production-evidence/proxy.log 2>&1 || true
-          docker image inspect charisma-under-test --format '{{.Id}}' > production-evidence/image-id.txt || true
+          docker compose -f deploy/compose.yml -f tests/integration/compose.override.yml logs --no-color > production-evidence/compose.log 2>&1 || true
+          docker image inspect charisma-monitor:0.2.0-rc.1 --format '{{.Id}}' > production-evidence/image-id.txt || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: production-integration-evidence
           path: production-evidence/
           retention-days: 14
+      - name: Stop disposable Compose services
+        if: always()
+        run: docker compose -f deploy/compose.yml -f tests/integration/compose.override.yml down
   postgres:
     name: PostgreSQL scope isolation
     runs-on: ubuntu-latest

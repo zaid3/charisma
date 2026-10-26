@@ -1,12 +1,13 @@
 """Tests only the disposable localhost containers launched by CI."""
 import json
 import os
+from pathlib import Path
 import time
 import urllib.request
 import urllib.error
 
-ADMIN='integration-admin-token-32-characters'
-GATEWAY='integration-gateway-token-32-characters'
+ADMIN=Path(os.environ['FIXTURE_ADMIN_FILE']).read_text().strip() if os.environ.get('FIXTURE_ADMIN_FILE') else 'integration-admin-token-32-characters'
+GATEWAY=Path(os.environ['FIXTURE_GATEWAY_FILE']).read_text().strip() if os.environ.get('FIXTURE_GATEWAY_FILE') else 'integration-gateway-token-32-characters'
 
 def request(port,path='/',data=None,token=None,headers=None):
     headers=headers or {}
